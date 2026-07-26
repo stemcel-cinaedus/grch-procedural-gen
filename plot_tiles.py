@@ -39,8 +39,8 @@ for i, tile in enumerate(data["Tile"]):
     ax.text(cx, cy, str(i+1), color='black', ha='center', va='center', fontsize=10, fontweight='bold')
 
 
-ax.set_xlim(-530, 530)
-ax.set_ylim(-530, 530)
+ax.set_xlim(0, 530)
+ax.set_ylim(0, 530)
 ax.invert_yaxis() 
 ax.set_aspect('equal')
 ax.set_title("Generated BSP Map Tiles")
