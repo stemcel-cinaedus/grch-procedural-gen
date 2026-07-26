@@ -107,9 +107,8 @@ impl Sub<Point2> for Point2 {
 struct Room(Point2, Point2, bool);
 
 
-fn split_dfs(root: &mut BSPNode<Tile>, mut depth: i64) {
+fn split_dfs(root: &mut BSPNode<Tile>, depth: i64) {
     if root.value.split_count < depth {
-        depth -= 1;
         root.split();
         split_dfs(root.right.as_mut().unwrap(), depth);
         split_dfs(root.left.as_mut().unwrap(), depth);
