@@ -18,14 +18,14 @@ struct BSPNode<T> {
 
 impl BSPNode<Tile> {
     fn random_split_helper_right(hw: Point2, tile_height: i64, tile_width: i64, s: bool) -> Point2 {
-        if (hw.1 as f64) / (hw.0 as f64) <= 0.2 {
-            return Point2((hw.0 - (tile_width as f64 * rand::random_range((2.0 / 5.0)..(3.0 / 5.0))) as i64), hw.1)
-        } else if (hw.1 as f64) / (hw.0 as f64) >= 5.0 {
-            return Point2(hw.0, (hw.1 - (tile_height as f64 * rand::random_range((2.0 / 5.0)..(3.0 / 5.0))) as i64))
+        if (tile_height as f64) / (tile_width as f64) <= 0.25 {
+            return Point2((hw.0 - (tile_width as f64 * rand::random_range((1.5 / 5.0)..(3.5 / 5.0))) as i64), hw.1)
+        } else if (tile_height as f64) / (tile_width as f64) >= 4.0 {
+            return Point2(hw.0, (hw.1 - (tile_height as f64 * rand::random_range((1.5 / 5.0)..(3.5 / 5.0))) as i64))
         } else if s == true {
-            return Point2((hw.0 - (tile_width as f64 * rand::random_range((2.0 / 5.0)..(3.0 / 5.0))) as i64), hw.1)
+            return Point2((hw.0 - (tile_width as f64 * rand::random_range((1.5 / 5.0)..(3.5 / 5.0))) as i64), hw.1)
         } else {
-            return Point2(hw.0, (hw.1 - (tile_height as f64 * rand::random_range((2.0 / 5.0)..(3.0 / 5.0))) as i64))
+            return Point2(hw.0, (hw.1 - (tile_height as f64 * rand::random_range((1.5 / 5.0)..(3.5 / 5.0))) as i64))
         }
     }
 
@@ -45,7 +45,7 @@ impl BSPNode<Tile> {
                         left:  None,
                         right: None,
                         room:  None,
-                        split_on_x: rand::random_bool(1.0 / 2.0),
+                        split_on_x: !(self.split_on_x),
                 }));
                 self.right = Some(Box::from(BSPNode{
                         value: Tile { 
@@ -65,7 +65,8 @@ impl BSPNode<Tile> {
                         left:  None,
                         right: None,
                         room:  None,
-                        split_on_x: rand::random_bool(1.0 / 2.0)}));
+                        split_on_x: !(self.split_on_x),
+                    }));
             
                 }
         }
@@ -148,10 +149,11 @@ fn split_dfs(root: &mut BSPNode<Tile>, depth: i64) {
 }
 
 fn construct_room(tile: Tile) -> Room {
-    let dist_from_lc: i64 = rand::random_range(1..3);
-    let dist_from_rc: i64 = rand::random_range(1..3);
+    //Lower values later, very high to be more visible on tile map
+    let dist_from_lc: i64 = rand::random_range(8..16);
+    let dist_from_rc: i64 = rand::random_range(8..16);
     return Room(
-        Point2(tile.rc.0 - dist_from_lc, tile.rc.1 - dist_from_lc),
+        Point2(tile.lc.0 - dist_from_lc, tile.lc.1 - dist_from_lc),
         Point2(tile.rc.0 - dist_from_rc, tile.rc.1 - dist_from_rc),
         true )
 }
@@ -204,10 +206,18 @@ fn main() {
     
     let tile_data = json!({
         "Tile": &map.tiles.iter().map(|t| {
+
+            let room = t.room.unwrap();
+
             json!({"Left Corner": (t.lc.0, t.lc.1),
                     "Right Corner": (t.rc.0, t.rc.1),
                     "Traversible": t.traversible,
-                    "Split Count": t.split_count
+                    "Split Count": t.split_count,
+                    "Room": {
+                            "Left Corner": (room.0.0, room.0.1),
+                            "Right Corner": (room.1.0, room.1.1),
+                            "Idr what the bool was for": room.2
+                    },
                     })
             }).collect::<Vec<_>>()
         });
