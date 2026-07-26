@@ -1,5 +1,8 @@
 use rand::{self};
 use std::ops::*;
+//Used for plotting the tiles:
+use serde_json::json;
+
 
 
 #[derive(Debug)]
@@ -37,7 +40,7 @@ impl BSPNode<Tile> {
                 self.right = Some(Box::from(BSPNode{
                         value: Tile { 
                             //Add conditional to make the tiles squares instead of line segments
-                            lc: self.value.lc + Point2(self.left.as_ref().unwrap().value.get_width(), self.left.as_ref().unwrap().value.get_height()),
+                            lc: self.left.as_ref().unwrap().value.rc,
                             rc: self.value.rc,
                             traversible: false,
                             split_count: (self.value.split_count + 1),
@@ -56,6 +59,7 @@ impl BSPNode<Tile> {
 #[derive(Debug)]
 #[derive(PartialEq)]
 #[derive(Copy, Clone)]
+
 struct Tile {
     lc: Point2,
     rc: Point2,
@@ -92,6 +96,7 @@ impl Map {
 #[derive(Debug)]
 #[derive(PartialEq)]
 #[derive(Copy, Clone)]
+
 pub struct Point2(i64, i64);
 
 impl Sub<Point2> for Point2 {
@@ -154,9 +159,19 @@ fn main() {
     let mut map = Map{max_height: 512, max_width: 512, tiles: Vec::<Tile>::new()};
     build_dfs(root, &mut map);
     
-    for tile in &map.tiles {
-        println!("Tile specs: Left Corner: {:#?}; Right Corner: {:#?}; Traversible: {:#?}; Split Count: {:#?}; Vector Length: {}", tile.lc, tile.rc, tile.traversible, tile.split_count, map.tiles.len())
-    }
+    let tile_data = json!({
+        "Tile": &map.tiles.iter().map(|t| {
+            json!({"Left Corner": (t.lc.0, t.lc.1),
+                    "Right Corner": (t.rc.0, t.rc.1),
+                    "Traversible": t.traversible,
+                    "Split Count": t.split_count
+                    })
+            }).collect::<Vec<_>>()
+        });
+
+    let tile_json = serde_json::to_string_pretty(&tile_data).unwrap();
+
+    print!("{}", tile_json);
 }
 
 
