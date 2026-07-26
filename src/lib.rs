@@ -24,9 +24,10 @@ impl BSPNode<Tile> {
                         value: Tile { 
                             lc: self.value.lc,
                             rc: if self.split_on_x == true {
-                                Point2((self.value.rc.0 as f64 * rand::random_range((1.0 / 5.0)..(4.0 / 5.0))) as i64, self.value.rc.1)
+                                //Need to multiply the width instead of absolute coords
+                                Point2((self.value.rc.0 - (self.value.get_width() as f64 * rand::random_range((2.0 / 5.0)..(3.0 / 5.0))) as i64), self.value.rc.1)
                                 } else {
-                                Point2(self.value.rc.0, (self.value.rc.1 as f64 * rand::random_range((1.0 / 5.0)..(4.0 / 5.0))) as i64)
+                                Point2(self.value.rc.0, (self.value.rc.1 - (self.value.get_height() as f64 * rand::random_range((2.0 / 5.0)..(3.0 / 5.0))) as i64))
                                 },
                             traversible: false,
                             split_count: (self.value.split_count + 1),
@@ -40,7 +41,13 @@ impl BSPNode<Tile> {
                 self.right = Some(Box::from(BSPNode{
                         value: Tile { 
                             //Add conditional to make the tiles squares instead of line segments
-                            lc: self.left.as_ref().unwrap().value.rc,
+                            
+                            lc: if self.split_on_x == true {
+                                Point2(self.left.as_ref().unwrap().value.rc.0, self.left.as_ref().unwrap().value.lc.1) 
+                            } else {
+                                Point2(self.left.as_ref().unwrap().value.lc.0, self.left.as_ref().unwrap().value.rc.1) 
+                            },
+                                
                             rc: self.value.rc,
                             traversible: false,
                             split_count: (self.value.split_count + 1),
@@ -154,7 +161,7 @@ pub fn initbt(size: Point2, divisions: i64) -> () {
 
 fn main() {
     let divisions: i64 = 4;
-    let mut root = BSPNode{ value: Tile{lc: Point2(0,0), rc: Point2(-512, -512), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_on_x: rand::random_bool(1.0/2.0)};
+    let mut root = BSPNode{ value: Tile{lc: Point2(0,0), rc: Point2(512, 512), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_on_x: rand::random_bool(1.0/2.0)};
     split_dfs(&mut root, divisions);
     let mut map = Map{max_height: 512, max_width: 512, tiles: Vec::<Tile>::new()};
     build_dfs(root, &mut map);
