@@ -147,6 +147,15 @@ fn split_dfs(root: &mut BSPNode<Tile>, depth: i64) {
     }
 }
 
+fn construct_room(tile: Tile) -> Room {
+    let dist_from_lc: i64 = rand::random_range(1..3);
+    let dist_from_rc: i64 = rand::random_range(1..3);
+    return Room(
+        Point2(tile.rc.0 - dist_from_lc, tile.rc.1 - dist_from_lc),
+        Point2(tile.rc.0 - dist_from_rc, tile.rc.1 - dist_from_rc),
+        true )
+}
+
 fn build_dfs(root: BSPNode<Tile>, map: &mut Map) -> () {
     if root.right != None {
         build_dfs(*root.right.unwrap(), map);
@@ -157,7 +166,13 @@ fn build_dfs(root: BSPNode<Tile>, map: &mut Map) -> () {
             rc: root.value.rc,
             traversible: true,
             split_count: root.value.split_count,
-            room: Some(Room(Point2(0, 0), Point2(0, 0), false))
+            room: Some(construct_room(Tile {
+                lc: (root.value.lc),
+                rc: (root.value.rc),
+                traversible: true,
+                split_count: root.value.split_count,
+                room: None
+            }))
         })
     }
 }
