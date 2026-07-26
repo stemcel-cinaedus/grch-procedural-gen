@@ -39,6 +39,23 @@ for i, tile in enumerate(data["Tile"]):
     ax.text(cx, cy, str(i+1), color='black', ha='center', va='center', fontsize=10, fontweight='bold')
 
 
+    if "Room" in tile:
+        rx1, ry1 = tile["Room"]["Left Corner"]
+        rx2, ry2 = tile["Room"]["Right Corner"]
+        
+        rx_min, rx_max = min(rx1, rx2), max(rx1, rx2)
+        ry_min, ry_max = min(ry1, ry2), max(ry1, ry2)
+        r_width = rx_max - rx_min
+        r_height = ry_max - ry_min
+        
+        # Plotted the room as a darker, more opaque red
+        room_rect = patches.Rectangle(
+            (rx_min, ry_min), r_width, r_height, 
+            linewidth=1.5, edgecolor='indigo', facecolor='blue', alpha=0.6
+        )
+        ax.add_patch(room_rect)
+    
+
 ax.set_xlim(0, 530)
 ax.set_ylim(0, 530)
 ax.invert_yaxis() 
