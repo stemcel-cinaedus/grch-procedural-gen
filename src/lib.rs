@@ -1,4 +1,4 @@
-use rand::{self};
+use rand::{self, random_bool};
 use std::ops::*;
 //Used for plotting the tiles:
 use serde_json::json;
@@ -18,14 +18,10 @@ struct BSPNode<T> {
 
 impl BSPNode<Tile> {
     fn random_split_helper_right(hw: Point2, tile_height: i64, tile_width: i64, s: bool) -> Point2 {
-        if (tile_height as f64) / (tile_width as f64) <= 0.25 {
-            return Point2((hw.0 - (tile_width as f64 * rand::random_range((1.5 / 5.0)..(3.5 / 5.0))) as i64), hw.1)
-        } else if (tile_height as f64) / (tile_width as f64) >= 4.0 {
-            return Point2(hw.0, (hw.1 - (tile_height as f64 * rand::random_range((1.5 / 5.0)..(3.5 / 5.0))) as i64))
-        } else if s == true {
-            return Point2((hw.0 - (tile_width as f64 * rand::random_range((1.5 / 5.0)..(3.5 / 5.0))) as i64), hw.1)
+        if s == true {
+            return Point2((hw.0 - (tile_width as f64 * rand::random_range(0.3..0.7)) as i64), hw.1)
         } else {
-            return Point2(hw.0, (hw.1 - (tile_height as f64 * rand::random_range((1.5 / 5.0)..(3.5 / 5.0))) as i64))
+            return Point2(hw.0, (hw.1 - (tile_height as f64 * rand::random_range(0.3..0.7)) as i64))
         }
     }
 
@@ -37,7 +33,13 @@ impl BSPNode<Tile> {
                     self.left = Some(Box::from(BSPNode{
                         value: Tile { 
                             lc: self.value.lc,
-                            rc: BSPNode::random_split_helper_right(self.value.rc, self.value.get_height(), self.value.get_width(), self.split_on_x ),
+                            rc: {
+                                if (self.value.get_height() as f64) / (self.value.get_width() as f64) <= 0.4 {
+                                    BSPNode::random_split_helper_right(self.value.rc, self.value.get_height(), self.value.get_width(), true) 
+                                } else if (self.value.get_height() as f64) / (self.value.get_width() as f64) >= 2.5 {
+                                    BSPNode::random_split_helper_right(self.value.rc, self.value.get_height(), self.value.get_width(), false) 
+                                } else {
+                                BSPNode::random_split_helper_right(self.value.rc, self.value.get_height(), self.value.get_width(), self.split_on_x )}},
                             traversible: false,
                             split_count: (self.value.split_count + 1),
                             room: None
@@ -51,12 +53,11 @@ impl BSPNode<Tile> {
                         value: Tile { 
                             //Add conditional to make the tiles squares instead of line segments
                             
-                            lc: if self.split_on_x == true {
-                                Point2(self.left.as_ref().unwrap().value.rc.0, self.left.as_ref().unwrap().value.lc.1) 
+                            lc: if self.left.as_ref().unwrap().value.rc.0 < self.value.rc.0 {
+                                Point2(self.left.as_ref().unwrap().value.rc.0, self.value.lc.1)
                             } else {
-                                Point2(self.left.as_ref().unwrap().value.lc.0, self.left.as_ref().unwrap().value.rc.1) 
-                            },
-                                
+                                Point2(self.value.lc.0, self.left.as_ref().unwrap().value.rc.1)
+                            },  
                             rc: self.value.rc,
                             traversible: false,
                             split_count: (self.value.split_count + 1),
@@ -148,14 +149,24 @@ fn split_dfs(root: &mut BSPNode<Tile>, depth: i64) {
     }
 }
 
-fn construct_room(tile: Tile) -> Room {
-    //Lower values later, very high to be more visible on tile map
-    let dist_from_lc: i64 = rand::random_range(8..16);
-    let dist_from_rc: i64 = rand::random_range(8..16);
-    return Room(
-        Point2(tile.lc.0 - dist_from_lc, tile.lc.1 - dist_from_lc),
-        Point2(tile.rc.0 - dist_from_rc, tile.rc.1 - dist_from_rc),
-        true )
+fn construct_room(tile: Tile, abs_dist_x: i64, abs_dist_y: i64, room_scale_factor: f64) -> Option<Room> {
+    if tile.traversible == false {
+        return None
+    }
+
+    //ABSOLUTE MESS rn, I need to add the random % movement as a function parameter as well. Works, but makes me feel illiterate
+    let dist_from_x: i64 = (tile.get_width() as f64 * rand::random_range(0.0..0.10)) as i64;
+    let dist_from_y: i64 = (tile.get_height() as f64 * rand::random_range(0.0..0.10)) as i64;
+    return Some(Room(
+        Point2(
+            ((tile.lc.0 as f64 + tile.get_width() as f64 * room_scale_factor) as i64 + (abs_dist_x / 2)) + dist_from_x,
+            ((tile.lc.1 as f64 + tile.get_height() as f64 * room_scale_factor)) as i64 + (abs_dist_y / 2) + dist_from_y
+        ),
+        Point2(
+            ((tile.rc.0 as f64 - tile.get_width() as f64 * room_scale_factor) as i64 - (abs_dist_x / 2)) - dist_from_x,
+            ((tile.rc.1 as f64 - tile.get_height() as f64 * room_scale_factor)) as i64 - (abs_dist_y / 2) - dist_from_y
+        ),
+        true ))
 }
 
 fn build_dfs(root: BSPNode<Tile>, map: &mut Map) -> () {
@@ -168,13 +179,13 @@ fn build_dfs(root: BSPNode<Tile>, map: &mut Map) -> () {
             rc: root.value.rc,
             traversible: true,
             split_count: root.value.split_count,
-            room: Some(construct_room(Tile {
+            room: construct_room(Tile {
                 lc: (root.value.lc),
                 rc: (root.value.rc),
-                traversible: true,
+                traversible: random_bool(2.0 / 3.0),
                 split_count: root.value.split_count,
                 room: None
-            }))
+            }, 0, 0, 0.05)
         })
     }
 }
@@ -198,27 +209,29 @@ pub fn initbt(size: Point2, divisions: i64) -> () {
 }
 
 fn main() {
-    let divisions: i64 = 4;
-    let mut root = BSPNode{ value: Tile{lc: Point2(0,0), rc: Point2(512, 512), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_on_x: rand::random_bool(1.0/2.0)};
+    let divisions: i64 = 6;
+    let mut root = BSPNode{ value: Tile{lc: Point2(0,0), rc: Point2(2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_on_x: rand::random_bool(1.0/2.0)};
     split_dfs(&mut root, divisions);
-    let mut map = Map{max_height: 512, max_width: 512, tiles: Vec::<Tile>::new()};
+    let mut map = Map{max_height: 1024, max_width: 1024, tiles: Vec::<Tile>::new()};
     build_dfs(root, &mut map);
     
     let tile_data = json!({
         "Tile": &map.tiles.iter().map(|t| {
-
-            let room = t.room.unwrap();
-
-            json!({"Left Corner": (t.lc.0, t.lc.1),
+            
+            let mut tile_json = json!({
+                    "Left Corner": (t.lc.0, t.lc.1),
                     "Right Corner": (t.rc.0, t.rc.1),
                     "Traversible": t.traversible,
                     "Split Count": t.split_count,
-                    "Room": {
-                            "Left Corner": (room.0.0, room.0.1),
-                            "Right Corner": (room.1.0, room.1.1),
-                            "Idr what the bool was for": room.2
-                    },
-                    })
+                    });
+                if let Some(room) = t.room {
+                    tile_json["Room"] = json!({
+                    "Left Corner": (room.0.0, room.0.1),
+                    "Right Corner": (room.1.0, room.1.1),
+                    "Idr what the bool was for": room.2
+                    });
+                }
+                tile_json
             }).collect::<Vec<_>>()
         });
 
