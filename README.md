@@ -1,1 +1,1 @@
-Binary Space Partitioning procedural generation program written in Rust
+Binary Space Partitioning procedural generation program written in Rust. Uses a k-d tree to partition space in all 3 dimensions into a cube of cuboids, then uses DFS functions to create rooms in random places throughout the cube.
