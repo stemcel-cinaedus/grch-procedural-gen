@@ -56,8 +56,8 @@ for i, tile in enumerate(data["Tile"]):
         ax.add_patch(room_rect)
     
 
-ax.set_xlim(0, 530)
-ax.set_ylim(0, 530)
+ax.set_xlim(0, 2120)
+ax.set_ylim(0, 2120)
 ax.invert_yaxis() 
 ax.set_aspect('equal')
 ax.set_title("Generated BSP Map Tiles")
