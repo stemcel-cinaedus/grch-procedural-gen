@@ -1,68 +1,85 @@
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 import json
+import matplotlib.pyplot as plt
 import tkinter as tk
 from tkinter import filedialog
 
+def draw_wireframe_box(ax, lc, rc, color='blue', linewidth=1.0, alpha=1.0):
+    """Draws a 3D bounding box using line segments."""
+    x = [lc[0], rc[0]]
+    y = [lc[1], rc[1]]
+    z = [lc[2], rc[2]]
 
-root = tk.Tk()
-root.withdraw()
-
-path = filedialog.askopenfilename()
-
-try:
-    with open(path, 'r', encoding='utf-8-sig') as f:
-        data = json.load(f)
-except UnicodeError:
-    with open(path, 'r', encoding='utf-16') as f:
-        data = json.load(f)
-
-fig, ax = plt.subplots(figsize=(8, 8))
-
-for i, tile in enumerate(data["Tile"]):
-    x1, y1 = tile["Left Corner"]
-    x2, y2 = tile["Right Corner"]
+    # Draw the bottom face (Z = z[0])
+    ax.plot([x[0], x[1], x[1], x[0], x[0]], 
+            [y[0], y[0], y[1], y[1], y[0]], 
+            [z[0], z[0], z[0], z[0], z[0]], 
+            color=color, lw=linewidth, alpha=alpha)
     
-    x_min, x_max = min(x1, x2), max(x1, x2)
-    y_min, y_max = min(y1, y2), max(y1, y2)
-    width = x_max - x_min
-    height = y_max - y_min
+    # Draw the top face (Z = z[1])
+    ax.plot([x[0], x[1], x[1], x[0], x[0]], 
+            [y[0], y[0], y[1], y[1], y[0]], 
+            [z[1], z[1], z[1], z[1], z[1]], 
+            color=color, lw=linewidth, alpha=alpha)
     
-    rect = patches.Rectangle(
-        (x_min, y_min), width, height, 
-        linewidth=1.5, edgecolor='blue', facecolor='cyan', alpha=0.4
-    )
-    ax.add_patch(rect)
-    
-    cx = x_min + (width / 2) if width > 0 else x_min
-    cy = y_min + (height / 2) if height > 0 else y_min
-    ax.text(cx, cy, str(i+1), color='black', ha='center', va='center', fontsize=10, fontweight='bold')
+    # Draw the four vertical pillars connecting top and bottom
+    for i in range(2):
+        for j in range(2):
+            ax.plot([x[i], x[i]], [y[j], y[j]], [z[0], z[1]], 
+                    color=color, lw=linewidth, alpha=alpha)
 
+def main():
 
-    if "Room" in tile:
-        rx1, ry1 = tile["Room"]["Left Corner"]
-        rx2, ry2 = tile["Room"]["Right Corner"]
-        
-        rx_min, rx_max = min(rx1, rx2), max(rx1, rx2)
-        ry_min, ry_max = min(ry1, ry2), max(ry1, ry2)
-        r_width = rx_max - rx_min
-        r_height = ry_max - ry_min
-        
-        # Plotted the room as a darker, more opaque red
-        room_rect = patches.Rectangle(
-            (rx_min, ry_min), r_width, r_height, 
-            linewidth=1.5, edgecolor='indigo', facecolor='blue', alpha=0.6
+    root = tk.Tk()
+    root.withdraw()
+    path = filedialog.askopenfilename()
+
+    try:
+        with open(path, 'r', encoding='utf-16') as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        with open(path, 'r') as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        print("Error: json not found")
+        return
+
+    # Setup the 3D plot
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Iterate through the tiles and plot
+    for tile in data.get('Tiles', []):
+        # 1. Plot the BSP Partition Tile (Faint Gray)
+        draw_wireframe_box(
+            ax, 
+            tile['Left Corner'], 
+            tile['Right Corner'], 
+            color='gray', 
+            linewidth=0.5, 
+            alpha=0.3
         )
-        ax.add_patch(room_rect)
-    
+        
+        # 2. Plot the Room if it exists (Bold Blue)
+        if tile.get('Room') is not None:
+            room = tile['Room']
+            draw_wireframe_box(
+                ax, 
+                room['Left Corner'], 
+                room['Right Corner'], 
+                color='blue', 
+                linewidth=2.0
+            )
 
-ax.set_xlim(0, 2120)
-ax.set_ylim(0, 2120)
-ax.invert_yaxis() 
-ax.set_aspect('equal')
-ax.set_title("Generated BSP Map Tiles")
-ax.set_xlabel("X Coordinate")
-ax.set_ylabel("Y Coordinate")
-plt.grid(True, linestyle='--', alpha=0.6)
+    # Format the axes
+    ax.set_xlabel('X Axis')
+    ax.set_ylabel('Y Axis')
+    ax.set_zlabel('Z Axis')
+    ax.set_title('3D BSP Dungeon Generation')
 
-plt.show()
+    # Force the aspect ratio to be equal so rooms aren't distorted
+    ax.set_box_aspect([1, 1, 1]) 
+
+    plt.show()
+
+if __name__ == "__main__":
+    main()
