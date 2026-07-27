@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D BSP Procedural Generation Visualizer </title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: sans-serif;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">3D BSP Procedural Generation<br/>Left Click: Rotate | Right Click: Pan | Scroll: Zoom</div>
+    <style>
+        #json-upload {
+         color: white; 
+            }
+
+        #json-upload::file-selector-button {
+            color: white;
+            background-color: #444;
+            border: 1px solid #666;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: sans-serif;
+        }
+
+        #json-upload::file-selector-button:hover {
+            background-color: #555;
+        }
+    </style>
+    <input type="file" id="json-upload" accept=".json" style="position: absolute; top: 50px; width: 100%; text-align: center; z-index: 120;">
+
+    
+    <!-- Import map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+        import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+
+        const scene = new THREE.Scene();
+        // Add some fog to give depth to big boy structure
+        scene.fog = new THREE.FogExp2(0x1a1a1a, 0.0002);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.set(3000, 3000, 3000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(1024, 1024, 1024);
+        controls.update();
+
+        function createWireframeBox(lc, rc, colorHex, opacity = 1.0, thickness = 3) {
+            const width = Math.abs(rc[0] - lc[0]);
+            const height = Math.abs(rc[1] - lc[1]);
+            const depth = Math.abs(rc[2] - lc[2]);
+
+            const centerX = (lc[0] + rc[0]) / 2;
+            const centerY = (lc[1] + rc[1]) / 2;
+            const centerZ = (lc[2] + rc[2]) / 2;
+
+            const lame_geometry = new THREE.BoxGeometry(width, height, depth);
+            const edges = new THREE.EdgesGeometry(lame_geometry);
+            
+            const geometry = new LineSegmentsGeometry().fromEdgesGeometry(edges)
+
+            const material = new LineMaterial({ 
+                color: colorHex,
+                linewidth: thickness,
+                resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+                transparent: opacity < 1.0,
+                opacity: opacity
+            });
+
+            const line = new LineSegments2(geometry, material);
+            line.position.set(centerX, centerY, centerZ);
+            
+            return line;
+        }
+
+        // summon json cube
+        async function loadDungeon() {
+            document.getElementById('json-upload').addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                    
+                        const objectsToRemove = [];
+                        scene.traverse((child) => {
+                            if (child.isLineSegments2) objectsToRemove.push(child);
+                        });
+                        objectsToRemove.forEach(obj => scene.remove(obj));
+
+                        let minX = Infinity, minY = Infinity, minZ = Infinity;
+                        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+                        function expandBounds(pt) {
+                            if (pt[0] < minX) minX = pt[0]; if (pt[1] < minY) minY = pt[1]; if (pt[2] < minZ) minZ = pt[2];
+                            if (pt[0] > maxX) maxX = pt[0]; if (pt[1] > maxY) maxY = pt[1]; if (pt[2] > maxZ) maxZ = pt[2];
+                        }
+
+                        const tiles = data.Tiles || [];
+                        tiles.forEach(tile => {
+                            if (tile['Left Corner'] && tile['Right Corner']) {
+                                const partition = createWireframeBox(tile['Left Corner'], tile['Right Corner'], 0x555555, 0.3, 2);
+                                scene.add(partition);
+                                expandBounds(tile['Left Corner']);
+                                expandBounds(tile['Right Corner']);
+                            }
+                            if (tile.Room && tile.Room['Left Corner'] && tile.Room['Right Corner']) {
+                                const room = createWireframeBox(tile.Room['Left Corner'], tile.Room['Right Corner'], 0x0088ff, 1.0, 3);
+                                scene.add(room);
+                            }
+                        });
+
+                        if (minX !== Infinity) {
+                            const mapCenterX = (minX + maxX) / 2;
+                            const mapCenterY = (minY + maxY) / 2;
+                            const mapCenterZ = (minZ + maxZ) / 2;
+                            const mapSize = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+
+                            controls.target.set(mapCenterX, mapCenterY, mapCenterZ);
+                            camera.position.set(mapCenterX + mapSize, mapCenterY + mapSize, mapCenterZ + mapSize);
+                            controls.update();
+                        }
+
+                    } catch (error) {
+                        console.error("Error parsing JSON:", error);
+                    }
+                };
+                reader.readAsText(file); 
+            });
+        }
+
+        loadDungeon();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+       window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            scene.traverse((child) => {
+                if (child.isLineSegments2) {
+                    child.material.resolution.set(window.innerWidth, window.innerHeight);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
