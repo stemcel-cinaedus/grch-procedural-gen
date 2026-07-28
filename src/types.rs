@@ -102,8 +102,6 @@ impl BSPNode<Tile> {
     }
 }
 
-
-
 #[derive(Debug)]
 #[derive(PartialEq)]
 #[derive(Clone)]

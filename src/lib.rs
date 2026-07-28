@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use rand::{self, RngExt, random_bool};
 use rand::rng;
 use rand::rngs::StdRng;
@@ -89,6 +90,85 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
         println!("{:#?} {:#?} {:#?}", tile.lc, tile.rc, tile.traversible)
     }
 }
+
+fn build_planes(tree: &BSPNode<Tile>) -> Vec<_> {
+    let planes = Vec::<_>::new();
+
+    while tree.right.is_some() {
+        build_planes(&(tree.right.as_deref().unwrap()));
+        build_planes(&(tree.right.as_deref().unwrap()));
+    }
+
+    let (lc, rc) = (tree.value.room.unwrap().0, tree.value.room.unwrap().1);
+    //Point P = x_0, y_0, z_0; Normal vector N = <a,b,c>, gen eqn: a(x - x_0) + b(y - y_0) + c(z - z_0) = 0
+    //let left_face_plane = -1(x - lc.0) + 0(y - y0) + 0(z - z0) = 0
+
+    return planes
+}
+
+fn get_groups(root: &BSPNode<Tile>, divisions: i64) {
+    while root.value.split_count > 2 {
+        get_groups(&(root.right.as_deref().unwrap()), divisions);
+        get_groups(&(root.left.as_deref().unwrap()), divisions);
+    }
+
+    
+
+}
+
+
+fn union_find(rooms: Vec::<Room>) -> i32 {
+    let mut vert_map = std::collections::HashMap::new();
+
+    rooms.into_iter().scan(-1, |i, room| {
+        *i += 1;
+        Some((i.clone(), room))
+    }).map(|(a, b)| vert_map.insert(a, b));
+
+    let mut parents: Vec<i32> = vec![0; vert_map.len()];
+    let mut rank: Vec<i32> = vec![0; vert_map.len()];
+
+    fn find(node1: (i32, Room), parents: &mut Vec<i32>) -> i32 {
+        let mut res = node1.0;
+        
+        while res != parents[res as usize] as i32 {
+            parents[res as usize] = parents[parents[res as usize] as usize];
+            res = parents[res as usize];
+           // vert_map[res.0] = vert_map[vert_map.contains_key(res.0)]
+        }
+        return res
+    }
+
+    fn union(c1: (i32, Room), c2: (i32, Room), mut parents: Vec<i32>, mut rank: Vec<i32>) -> i32{
+        let p1 = find(c1, &mut parents);
+        let p2 = find(c2, &mut parents);
+
+        if p1 == p2 {
+            return 0
+        }
+
+        if rank[p2 as usize] > rank[p1 as usize] {
+            parents[p1 as usize] = p2;
+            rank[p2 as usize] += rank[p1 as usize];
+        } else {
+            parents[p2 as usize] = p1;
+            rank[p1 as usize] += rank[p2 as usize];
+        } return 1
+    }
+
+    /*
+    let mut result: i32 = vert_map.len() as i32;
+    for (n1, n2) in edges {
+        result -= union(n1, n2, parents, rank);
+    } 
+    return result
+    */
+    return 0
+}
+
+
+
+
 
 fn main() {
     let mut rng = StdRng::seed_from_u64(SEED);
