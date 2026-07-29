@@ -1,0 +1,366 @@
+use std::collections::HashMap;
+use std::print;
+use rand::{self, RngExt, random_bool};
+use rand::rng;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+//Used for plotting the tiles:
+use serde_json::json;
+
+pub mod types;
+use crate::types::*;
+
+pub const SEED: u64 = 184138956713986453;
+pub const PLACE_DIST: i64 = 20;
+pub const CORRIDOR_OFFSET: Point3 = Point3(2, 2, 2);
+
+
+
+
+
+fn split_dfs(root: &mut BSPNode<Tile>, depth: i64) {
+    if root.value.split_count < depth {
+        root.split();
+        split_dfs(root.right.as_mut().unwrap(), depth);
+        split_dfs(root.left.as_mut().unwrap(), depth);
+    } else {
+        return
+    }
+}
+
+fn construct_room(tile: Tile, abs_dist_x: i64, abs_dist_y: i64, abs_dist_z: i64, room_scale_factor: f64, rng: &mut StdRng) -> Option<Room> {
+    if tile.traversible == false {
+        return None
+    }
+
+    //ABSOLUTE MESS rn, I need to add the random % movement as a function parameter as well. Works, but makes me feel illiterate
+    let dist_from_x: i64 = (tile.get_width() as f64 * rng.random_range(0.0..0.10)) as i64;
+    let dist_from_y: i64 = (tile.get_height() as f64 * rng.random_range(0.0..0.10)) as i64;
+    let dist_from_z: i64 = (tile.get_depth() as f64 * rng.random_range(0.0..0.10)) as i64;
+
+    return Some(Room(
+        Point3(
+            ((tile.lc.0 as f64 + tile.get_width() as f64 * room_scale_factor) as i64 + (abs_dist_x / 2)) + dist_from_x,
+            ((tile.lc.1 as f64 + tile.get_height() as f64 * room_scale_factor)) as i64 + (abs_dist_y / 2) + dist_from_y,
+            ((tile.lc.2 as f64 + tile.get_depth() as f64 * room_scale_factor)) as i64 + (abs_dist_z / 2) + dist_from_z
+        ),
+        Point3(
+            ((tile.rc.0 as f64 - tile.get_width() as f64 * room_scale_factor) as i64 - (abs_dist_x / 2)) - dist_from_x,
+            ((tile.rc.1 as f64 - tile.get_height() as f64 * room_scale_factor)) as i64 - (abs_dist_y / 2) - dist_from_y,
+            ((tile.rc.2 as f64 - tile.get_depth() as f64 * room_scale_factor)) as i64 - (abs_dist_z / 2) - dist_from_z
+        ),
+        true ))
+}
+
+fn build_dfs(root: &BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
+    
+    if root.right != None {
+        build_dfs(root.right.as_deref().unwrap(), map, rng);
+        build_dfs(root.left.as_deref().unwrap(), map, rng);
+        } else {
+        map.tiles.push(Tile{
+            lc: root.value.lc,
+            rc: root.value.rc,
+            traversible: true,
+            split_count: root.value.split_count,
+            room: construct_room(Tile {
+                lc: (root.value.lc),
+                rc: (root.value.rc),
+                traversible: rng.random_bool(2.0 / 3.0),
+                split_count: root.value.split_count,
+                room: None
+            }, 0, 0, 0, 0.05, rng)
+        })
+    }
+}
+
+
+pub fn initbt(size: Point3, divisions: i64) -> () {
+    let mut rng = StdRng::seed_from_u64(SEED);
+
+    let mut root = BSPNode{
+        value: Tile{lc: Point3(0, 0, 0), rc: size, traversible: false, split_count: 0, room: None},
+        right: None,
+        left: None,
+        room: None,
+        split_d: Axis::random_variant()
+    };
+    split_dfs(&mut root, divisions);
+    let mut map = Map{tiles: Vec::<Tile>::new()};
+    build_dfs(&root, &mut map, &mut rng);
+    
+    for tile in map.tiles {
+        println!("{:#?} {:#?} {:#?}", tile.lc, tile.rc, tile.traversible)
+    }
+}
+
+
+//Make Megumi holes
+fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis) -> Vec<Point3> {
+    match axis {
+        Axis::X => {
+            //Start at lowest Z & lowest Y value, move along the face of the shape to create more every d distance
+            let y_range = bounding_corner.1 - corner.1;
+            let z_range = bounding_corner.2 - corner.2;
+
+            let y = corner.1;
+            let mut z = corner.2;
+
+            let mut candidates = Vec::<Point3>::new();
+
+            while y.abs() < (y.abs() + y_range.abs()) && z.abs() < (z.abs() + z_range.abs()) {
+                //TODO: I want to change this to check if it's within bounds first
+                candidates.push(Point3(corner.0, (y + CORRIDOR_OFFSET.1), (z + CORRIDOR_OFFSET.2)));
+                //Currently, I am only placing candidates at the lowest Y level to get a working version first. Later, I will add variable Y as well.
+                z += PLACE_DIST;
+            }
+            return candidates;
+
+        }, //Add steepness check later
+        Axis::Y => {return Vec::<Point3>::new()}, //Add vertical corridors later
+        Axis::Z => {
+            let x_range = bounding_corner.0 - corner.0;
+            let y_range = bounding_corner.1 - corner.1;
+            
+            let mut x = corner.0;
+            let y = corner.1;
+            
+            let mut candidates = Vec::<Point3>::new();
+
+            while y.abs() < (y.abs() + y_range.abs()) && x.abs() < (x.abs() + x_range.abs()) {
+                //TODO: I want to change this to check if it's within bounds first
+                candidates.push(Point3((x + CORRIDOR_OFFSET.0), (y + CORRIDOR_OFFSET.1), corner.2));
+                //Currently, I am only placing candidates at the lowest Y level to get a working version first. Later, I will add variable Y as well.
+                x += PLACE_DIST;
+            }
+            return candidates;
+        }
+    }
+}
+
+fn generate_edges(mut rooms: (Room, Room)) -> (Point3, Point3) {
+    let (lc1, rc1) = (rooms.0.0, rooms.0.1);
+    let (lc2, rc2) = (rooms.1.0, rooms.1.1);
+    //Point P = x_0, y_0, z_0; Normal vector N = <a,b,c>, gen eqn: a(x - x_0) + b(y - y_0) + c(z - z_0) = 0
+    //left_face_plane: -1(x - lc.0) + 0(y - y0) + 0(z - z0) = 0
+    //left_face_plane: -1(x - lc.0) = 0
+    //left_face_plane: -x + lc.0 = 0
+
+    let mut candidates1  = Vec::<_>::new();
+    let mut candidates2  = Vec::<_>::new();
+
+    for n in 0..2 {
+        let lc2_val = match n {
+            0 => lc2.0,
+            1 => lc2.1,
+            2 => lc2.2,
+            _ => 0          
+        };
+        let rc1_val = match n {
+            0 => rc1.0,
+            1 => rc1.1,
+            2 => rc1.2,
+            _ => 0        
+        };
+
+        let n = n as i32;
+        if lc2_val - rc1_val > 0 {
+            candidates1.push(generate_candidates(lc2, rc2, Axis::try_from(n).unwrap()));
+            candidates2.push(generate_candidates(rc1, lc1, Axis::try_from(n).unwrap()));
+        } else if lc2_val - rc1_val == 0 {
+            panic!("Rooms have overlapping edges, critical error in BSP room creation function")
+        } else {
+            candidates1.push(generate_candidates(rc2, lc2, Axis::try_from(n).unwrap()));
+            candidates2.push(generate_candidates(lc1, rc1, Axis::try_from(n).unwrap()));
+        }
+    }
+
+    //TODO: Implement distance algorithm for each candidate array, ideally in O(k log_k), somehow a hard task
+
+    //hmmmmmmmmmmmmmmmmmmmmm i dont want to do it naivelyyyy
+
+    let mut shortest =  f64::INFINITY;
+    let mut shortest_points = (Point3(0,0,0), Point3(0,0,0));
+
+    let mut c1 = Vec::<Point3>::new();
+    let mut c2 = Vec::<Point3>::new();
+    candidates1.iter().for_each(|v| c1.extend(v));
+    candidates2.iter().for_each(|v| c2.extend(v));
+
+    for e1 in &c1 {
+        for e2 in &c2 {
+            let dist = ((e1.0 as f64 + e2.0 as f64).powf(2.0) + (e1.1 as f64 + e2.1 as f64).powf(2.0) + (e1.2 as f64 + e2.2 as f64).powf(2.0)).sqrt();
+            if dist < shortest {
+                shortest = dist;
+                shortest_points = (*e1, *e2); 
+            }
+        }
+    }
+    return shortest_points
+}
+
+fn get_groups(root: &BSPNode<Tile>, divisions: i64) {
+    while root.value.split_count > 2 {
+        get_groups(&(root.right.as_deref().unwrap()), divisions);
+        get_groups(&(root.left.as_deref().unwrap()), divisions);
+    }
+
+    fn get_leaf_rooms(root: &BSPNode<Tile>) -> (Option<Room>, Option<Room>) {
+        match ((root.right.as_deref().unwrap().value.room), (root.left.as_deref().unwrap().value.room)) {
+            (Some(r1), Some(r2)) => return (Some(r1), Some(r2)),
+            (Some(r1), None) => return (Some(r1), None),
+            (None, Some(r2)) => return (None, Some(r2)),
+            _ => return (None, None)
+        }
+    }
+
+    let mut rooms_in_grandparent = Vec::<Room>::new();
+    let mut edges = Vec::<(Point3, Point3)>::new();
+
+    //TODO: Use better connection method. Using the first Room found in the grandparent is retarded.
+
+    match get_leaf_rooms(&(root.left.as_deref().unwrap())) {
+        (Some(r1), Some(r2)) => {
+            edges.push(generate_edges((r1, r2)));
+            rooms_in_grandparent.push(r1);
+            rooms_in_grandparent.push(r2);},
+        (Some(r1), None) => {
+            if !rooms_in_grandparent.is_empty() {
+                edges.push(generate_edges((r1, rooms_in_grandparent[0])))
+            }
+            rooms_in_grandparent.push(r1);
+        },
+        (None, Some(r2)) => {
+            if !rooms_in_grandparent.is_empty() {
+                edges.push(generate_edges((r2, rooms_in_grandparent[0])))
+            }
+            rooms_in_grandparent.push(r2);
+        },
+        (None, None) => () 
+    }
+    match get_leaf_rooms(&(root.right.as_deref().unwrap())) {
+        (Some(r1), Some(r2)) => {
+            edges.push(generate_edges((r1, r2)));
+            rooms_in_grandparent.push(r1);
+            rooms_in_grandparent.push(r2);},
+        (Some(r1), None) => {
+            if !rooms_in_grandparent.is_empty() {
+                edges.push(generate_edges((r1, rooms_in_grandparent[0])))
+            }
+            rooms_in_grandparent.push(r1);
+        },
+        (None, Some(r2)) => {
+            if !rooms_in_grandparent.is_empty() {
+                edges.push(generate_edges((r2, rooms_in_grandparent[0])))
+            }
+            rooms_in_grandparent.push(r2);
+        },
+        (None, None) => () 
+    }
+    
+}
+
+
+
+fn union_find(rooms: Vec::<Room>) -> i32 {
+    let mut vert_map = std::collections::HashMap::new();
+
+    rooms.into_iter().scan(-1, |i, room| {
+        *i += 1;
+        Some((i.clone(), room))
+    }).map(|(a, b)| vert_map.insert(a, b));
+
+    let mut parents: Vec<i32> = vec![0; vert_map.len()];
+    let mut rank: Vec<i32> = vec![0; vert_map.len()];
+
+    fn find(node1: (i32, Room), parents: &mut Vec<i32>) -> i32 {
+        let mut res = node1.0;
+        
+        while res != parents[res as usize] as i32 {
+            parents[res as usize] = parents[parents[res as usize] as usize];
+            res = parents[res as usize];
+           // vert_map[res.0] = vert_map[vert_map.contains_key(res.0)]
+        }
+        return res
+    }
+
+    fn union(c1: (i32, Room), c2: (i32, Room), mut parents: Vec<i32>, mut rank: Vec<i32>) -> i32{
+        let p1 = find(c1, &mut parents);
+        let p2 = find(c2, &mut parents);
+
+        if p1 == p2 {
+            return 0
+        }
+
+        if rank[p2 as usize] > rank[p1 as usize] {
+            parents[p1 as usize] = p2;
+            rank[p2 as usize] += rank[p1 as usize];
+        } else {
+            parents[p2 as usize] = p1;
+            rank[p1 as usize] += rank[p2 as usize];
+        } return 1
+    }
+
+    /*
+    let mut result: i32 = vert_map.len() as i32;
+    for (n1, n2) in edges {
+        result -= union(n1, n2, parents, rank);
+    } 
+    return result
+    */
+    return 0
+}
+
+
+
+
+
+fn main() {
+    let mut rng = StdRng::seed_from_u64(SEED);
+
+    let divisions: i64 = 6;
+    let mut root = BSPNode{ value: Tile{lc: Point3(0,0,0), rc: Point3(2048, 2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_d: Axis::random_variant()};
+    split_dfs(&mut root, divisions);
+    let mut map = Map{tiles: Vec::<Tile>::new()};
+    build_dfs(&root, &mut map, &mut rng);
+    
+    let tile_json = json!({
+    "Tiles": &map.tiles.iter().map(|tile| {
+
+        let mut tile_json = json!({
+            "Left Corner": (tile.lc.0, tile.lc.1, tile.lc.2 ),
+            "Right Corner": (tile.rc.0, tile.rc.1, tile.rc.2 ),
+            "traversible": tile.traversible,
+            "split_count": tile.split_count,
+            });
+
+        if let Some(room) = tile.room {
+            tile_json["Room"] = json!({
+                    "Left Corner": (room.0.0, room.0.1, room.0.2 ),
+                    "Right Corner": (room.1.0, room.1.1, room.1.2 )
+                })
+            };
+            tile_json
+        }).collect::<Vec<_>>()
+    });
+
+// Convert the JSON object to a pretty-printed String
+let tile_json = serde_json::to_string_pretty(&tile_json).unwrap();
+
+    print!("{}", tile_json);
+}
+
+
+
+/*
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
+    }
+}
+*/
