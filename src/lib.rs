@@ -92,9 +92,6 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
     }
 }
 
-fn plane(corner: Point3, bounding_corner: Point3, axis: Axis) {
-
-}
 
 //Make Megumi holes
 fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis, place_dist: i64, corridor_offset: Point3) -> Vec<Point3> {
@@ -139,7 +136,7 @@ fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis, plac
     }
 }
 
-fn generate_edges(mut rooms: (Room, Room), place_dist: i64, corridor_offset: Point3) {
+fn generate_edges(mut rooms: (Room, Room), place_dist: i64, corridor_offset: Point3) -> (Point3, Point3) {
     let (lc1, rc1) = (rooms.0.0, rooms.0.1);
     let (lc2, rc2) = (rooms.1.0, rooms.1.1);
     //Point P = x_0, y_0, z_0; Normal vector N = <a,b,c>, gen eqn: a(x - x_0) + b(y - y_0) + c(z - z_0) = 0
@@ -174,11 +171,30 @@ fn generate_edges(mut rooms: (Room, Room), place_dist: i64, corridor_offset: Poi
             candidates1.push(generate_candidates(rc2, lc2, Axis::try_from(n).unwrap(), place_dist, corridor_offset));
             candidates2.push(generate_candidates(lc1, rc1, Axis::try_from(n).unwrap(), place_dist, corridor_offset));
         }
-
-
     }
 
+    //TODO: Implement distance algorithm for each candidate array, ideally in O(k log_k), somehow a hard task
 
+    //hmmmmmmmmmmmmmmmmmmmmm i dont want to do it naivelyyyy
+
+    let mut shortest =  f64::INFINITY;
+    let mut shortest_points = (Point3(0,0,0), Point3(0,0,0));
+
+    let mut c1 = Vec::<Point3>::new();
+    let mut c2 = Vec::<Point3>::new();
+    candidates1.iter().for_each(|v| c1.extend(v));
+    candidates2.iter().for_each(|v| c2.extend(v));
+
+    for e1 in &c1 {
+        for e2 in &c2 {
+            let dist = ((e1.0 as f64 + e2.0 as f64).powf(2.0) + (e1.1 as f64 + e2.1 as f64).powf(2.0) + (e1.2 as f64 + e2.2 as f64).powf(2.0)).sqrt();
+            if dist < shortest {
+                shortest = dist;
+                shortest_points = (*e1, *e2); 
+            }
+        }
+    }
+    return shortest_points
 }
 
 fn get_groups(root: &BSPNode<Tile>, divisions: i64) {
