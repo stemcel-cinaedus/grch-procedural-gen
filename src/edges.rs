@@ -1,14 +1,18 @@
+use std::cell::RefCell;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
-use std::print;
-use rand::{self, RngExt, random_bool};
-use rand::rng;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
+use std::sync::{Arc, RwLock};
+use std::thread;
+
+
 
 use crate::PLACE_DIST;
 use crate::CORRIDOR_OFFSET;
 
 use crate::types::*;
+
+pub static EDGES: RwLock<Vec<(usize, Point3, Point3)>> = RwLock::new(Vec::<(usize, Point3, Point3)>::new());
+pub static INDEX: AtomicUsize = AtomicUsize::new(0);
 
 //Make Megumi holes
 fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis) -> Vec<Point3> {
@@ -53,9 +57,9 @@ fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis) -> V
     }
 }
 
-fn generate_edges(mut rooms: (Room, Room)) -> (Point3, Point3) {
-    let (lc1, rc1) = (rooms.0.0, rooms.0.1);
-    let (lc2, rc2) = (rooms.1.0, rooms.1.1);
+fn generate_edges(rooms: (usize, Room, Room)) -> (usize, Point3, Point3) {
+    let (lc1, rc1) = (rooms.1.0, rooms.1.1);
+    let (lc2, rc2) = (rooms.2.0, rooms.2.1);
     //Point P = x_0, y_0, z_0; Normal vector N = <a,b,c>, gen eqn: a(x - x_0) + b(y - y_0) + c(z - z_0) = 0
     //left_face_plane: -1(x - lc.0) + 0(y - y0) + 0(z - z0) = 0
     //left_face_plane: -1(x - lc.0) = 0
@@ -93,7 +97,7 @@ fn generate_edges(mut rooms: (Room, Room)) -> (Point3, Point3) {
     //TODO: Implement distance algorithm for each candidate array, ideally in O(k log_k), somehow a hard task
 
     let mut shortest =  f64::INFINITY;
-    let mut shortest_points = (Point3(0,0,0), Point3(0,0,0));
+    let mut shortest_points = (INDEX.fetch_add(1, Ordering::Relaxed), Point3(0,0,0), Point3(0,0,0));
 
     let mut c1 = Vec::<Point3>::new();
     let mut c2 = Vec::<Point3>::new();
@@ -105,14 +109,14 @@ fn generate_edges(mut rooms: (Room, Room)) -> (Point3, Point3) {
             let dist = ((e1.0 as f64 + e2.0 as f64).powf(2.0) + (e1.1 as f64 + e2.1 as f64).powf(2.0) + (e1.2 as f64 + e2.2 as f64).powf(2.0)).sqrt();
             if dist < shortest {
                 shortest = dist;
-                shortest_points = (*e1, *e2); 
+                shortest_points = (shortest_points.0, *e1, *e2); 
             }
         }
     }
     return shortest_points
 }
 
-fn get_groups(root: &BSPNode<Tile>, divisions: i64) -> Vec<(Point3, Point3)>{
+fn get_groups(root: &BSPNode<Tile>, divisions: i64) {
     while root.value.split_count > 2 {
         get_groups(&(root.right.as_deref().unwrap()), divisions);
         get_groups(&(root.left.as_deref().unwrap()), divisions);
@@ -128,24 +132,23 @@ fn get_groups(root: &BSPNode<Tile>, divisions: i64) -> Vec<(Point3, Point3)>{
     }
 
     let mut rooms_in_grandparent = Vec::<Room>::new();
-    let mut edges = Vec::<(Point3, Point3)>::new();
 
     //TODO: Use better connection method. Using the first Room found in the grandparent is retarded.
 
     match get_leaf_rooms(&(root.left.as_deref().unwrap())) {
         (Some(r1), Some(r2)) => {
-            edges.push(generate_edges((r1, r2)));
+            EDGES.write().unwrap().push(generate_edges((INDEX.fetch_add(1, Ordering::Relaxed), r1, r2)));
             rooms_in_grandparent.push(r1);
             rooms_in_grandparent.push(r2);},
         (Some(r1), None) => {
             if !rooms_in_grandparent.is_empty() {
-                edges.push(generate_edges((r1, rooms_in_grandparent[0])))
+                EDGES.write().unwrap().push(generate_edges((INDEX.fetch_add(1, Ordering::Relaxed), r1, rooms_in_grandparent[0])))
             }
             rooms_in_grandparent.push(r1);
         },
         (None, Some(r2)) => {
             if !rooms_in_grandparent.is_empty() {
-                edges.push(generate_edges((r2, rooms_in_grandparent[0])))
+                EDGES.write().unwrap().push(generate_edges((INDEX.fetch_add(1, Ordering::Relaxed), r2, rooms_in_grandparent[0])))
             }
             rooms_in_grandparent.push(r2);
         },
@@ -153,25 +156,23 @@ fn get_groups(root: &BSPNode<Tile>, divisions: i64) -> Vec<(Point3, Point3)>{
     }
     match get_leaf_rooms(&(root.right.as_deref().unwrap())) {
         (Some(r1), Some(r2)) => {
-            edges.push(generate_edges((r1, r2)));
+            EDGES.write().unwrap().push(generate_edges((INDEX.fetch_add(1, Ordering::Relaxed), r1, r2)));
             rooms_in_grandparent.push(r1);
             rooms_in_grandparent.push(r2);},
         (Some(r1), None) => {
             if !rooms_in_grandparent.is_empty() {
-                edges.push(generate_edges((r1, rooms_in_grandparent[0])))
+                EDGES.write().unwrap().push(generate_edges((INDEX.fetch_add(1, Ordering::Relaxed), r1, rooms_in_grandparent[0])))
             }
             rooms_in_grandparent.push(r1);
         },
         (None, Some(r2)) => {
             if !rooms_in_grandparent.is_empty() {
-                edges.push(generate_edges((r2, rooms_in_grandparent[0])))
+                EDGES.write().unwrap().push(generate_edges((INDEX.fetch_add(1, Ordering::Relaxed), r2, rooms_in_grandparent[0])))
             }
             rooms_in_grandparent.push(r2);
         },
         (None, None) => () 
     }
-    
-    return edges
 }
 
 
@@ -182,7 +183,9 @@ fn union_find(rooms: Vec::<Room>) -> i32 {
     rooms.into_iter().scan(-1, |i, room| {
         *i += 1;
         Some((i.clone(), room))
-    }).map(|(a, b)| vert_map.insert(a, b));
+    }).for_each(|(a, b)| {
+         vert_map.insert(a, b);
+        });
 
     let mut parents: Vec<i32> = vec![0; vert_map.len()];
     let mut rank: Vec<i32> = vec![0; vert_map.len()];
