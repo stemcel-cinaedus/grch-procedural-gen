@@ -4,6 +4,7 @@ use rand::rngs::StdRng;
 use rand::rng;
 use rand::SeedableRng;
 use crate::SEED;
+use std::convert::TryFrom;
 
 
 #[derive(Debug)]
@@ -13,7 +14,7 @@ pub struct BSPNode<T> {
     pub left: Option<Box<BSPNode<T>>>,
     pub right: Option<Box<BSPNode<T>>>,
     pub room: Option<Room>,
-    pub split_d: SplitAxis
+    pub split_d: Axis
 }
 
 
@@ -28,23 +29,23 @@ impl BSPNode<Tile> {
             let rng_factor = rand::random_range(0.3..0.7);
 
             let next_split = match (self.split_d) {
-                            SplitAxis::X => {
+                            Axis::X => {
                                 if self.value.get_depth() > self.value.get_height() {
-                                    SplitAxis::Z
+                                    Axis::Z
                                 } else {
-                                    SplitAxis::Y
+                                    Axis::Y
                                 }}
-                            SplitAxis::Y => {
+                            Axis::Y => {
                                 if self.value.get_depth() > self.value.get_width() {
-                                    SplitAxis::Z
+                                    Axis::Z
                                 } else {
-                                    SplitAxis::X
+                                    Axis::X
                                 }}
-                            SplitAxis::Z => {
+                            Axis::Z => {
                                 if self.value.get_width() > self.value.get_height() {
-                                    SplitAxis::X
+                                    Axis::X
                                 } else {
-                                    SplitAxis::Y
+                                    Axis::Y
                                 }
                             }
                         };
@@ -56,9 +57,9 @@ impl BSPNode<Tile> {
                         value: Tile {
                             lc: self.value.lc,
                             rc: { 
-                                if self.split_d == SplitAxis::Z {
+                                if self.split_d == Axis::Z {
                                     Point3(self.value.rc.0, self.value.rc.1, self.value.rc.2 - (self.value.get_depth() as f64 * rng_factor) as i64)
-                                } else if self.split_d == SplitAxis::Y {
+                                } else if self.split_d == Axis::Y {
                                     Point3(self.value.rc.0, self.value.rc.1 - (self.value.get_height() as f64 * rng_factor) as i64, self.value.rc.2 )
                                 } else {
                                     Point3(self.value.rc.0 - (self.value.get_width() as f64 * rng_factor) as i64, self.value.rc.1, self.value.rc.2)
@@ -79,9 +80,9 @@ impl BSPNode<Tile> {
                             //Add conditional to make the tiles squares instead of line segments
                             
                             lc: {
-                                if self.split_d == SplitAxis::Z {
+                                if self.split_d == Axis::Z {
                                     Point3(self.value.lc.0, self.value.lc.1, self.left.as_ref().unwrap().value.rc.2)
-                                } else if self.split_d == SplitAxis::Y {
+                                } else if self.split_d == Axis::Y {
                                     Point3(self.value.lc.0, self.left.as_ref().unwrap().value.rc.1, self.value.lc.2)
                                 } else {
                                     Point3(self.left.as_ref().unwrap().value.rc.0, self.value.lc.1, self.value.lc.2)
@@ -105,20 +106,33 @@ impl BSPNode<Tile> {
 #[derive(Debug)]
 #[derive(PartialEq)]
 #[derive(Clone)]
-pub enum SplitAxis {
+pub enum Axis {
     X,
     Y,
-    Z
+    Z 
 }
 
-impl SplitAxis {
-    pub fn random_variant() -> SplitAxis {
+impl Axis {
+    pub fn random_variant() -> Axis {
         let mut rng = StdRng::seed_from_u64(SEED);
         return match rng.random_range(1..4) {
-            1..2 => SplitAxis::X,
-            2..3 => SplitAxis::Y,
-            3..4 => SplitAxis::Z,
-            _ => SplitAxis::X
+            1..2 => Axis::X,
+            2..3 => Axis::Y,
+            3..4 => Axis::Z,
+            _ => Axis::X
+        }
+    }
+}
+
+impl TryFrom<i32> for Axis {
+    type Error = &'static str;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Axis::X),
+            1 => Ok(Axis::Y),
+            2 => Ok(Axis::Z),
+            _ => Err("Invalid axis value"),
         }
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::print;
 use rand::{self, RngExt, random_bool};
 use rand::rng;
 use rand::rngs::StdRng;
@@ -80,7 +81,7 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
         right: None,
         left: None,
         room: None,
-        split_d: SplitAxis::random_variant()
+        split_d: Axis::random_variant()
     };
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
@@ -91,19 +92,93 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
     }
 }
 
-fn build_planes(tree: &BSPNode<Tile>) -> Vec<_> {
-    let planes = Vec::<_>::new();
+fn plane(corner: Point3, bounding_corner: Point3, axis: Axis) {
 
-    while tree.right.is_some() {
-        build_planes(&(tree.right.as_deref().unwrap()));
-        build_planes(&(tree.right.as_deref().unwrap()));
+}
+
+//Make Megumi holes
+fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis, place_dist: i64, corridor_offset: Point3) -> Vec<Point3> {
+    match axis {
+        Axis::X => {
+            //Start at lowest Z & lowest Y value, move along the face of the shape to create more every d distance
+            let y_range = bounding_corner.1 - corner.1;
+            let z_range = bounding_corner.2 - corner.2;
+
+            let y = corner.1;
+            let mut z = corner.2;
+
+            let mut candidates = Vec::<Point3>::new();
+
+            while y.abs() < (y.abs() + y_range.abs()) && z.abs() < (z.abs() + z_range.abs()) {
+                //TODO: I want to change this to check if it's within bounds first
+                candidates.push(Point3(corner.0, (y + corridor_offset.1), (z + corridor_offset.2)));
+                //Currently, I am only placing candidates at the lowest Y level to get a working version first. Later, I will add variable Y as well.
+                z += place_dist;
+            }
+            return candidates;
+
+        }, //Add steepness check later
+        Axis::Y => {return Vec::<Point3>::new()}, //Add vertical corridors later
+        Axis::Z => {
+            let x_range = bounding_corner.0 - corner.0;
+            let y_range = bounding_corner.1 - corner.1;
+            
+            let mut x = corner.0;
+            let y = corner.1;
+            
+            let mut candidates = Vec::<Point3>::new();
+
+            while y.abs() < (y.abs() + y_range.abs()) && x.abs() < (x.abs() + x_range.abs()) {
+                //TODO: I want to change this to check if it's within bounds first
+                candidates.push(Point3((x + corridor_offset.0), (y + corridor_offset.1), corner.2));
+                //Currently, I am only placing candidates at the lowest Y level to get a working version first. Later, I will add variable Y as well.
+                x += place_dist;
+            }
+            return candidates;
+        }
+    }
+}
+
+fn generate_edges(mut rooms: (Room, Room), place_dist: i64, corridor_offset: Point3) {
+    let (lc1, rc1) = (rooms.0.0, rooms.0.1);
+    let (lc2, rc2) = (rooms.1.0, rooms.1.1);
+    //Point P = x_0, y_0, z_0; Normal vector N = <a,b,c>, gen eqn: a(x - x_0) + b(y - y_0) + c(z - z_0) = 0
+    //left_face_plane: -1(x - lc.0) + 0(y - y0) + 0(z - z0) = 0
+    //left_face_plane: -1(x - lc.0) = 0
+    //left_face_plane: -x + lc.0 = 0
+
+    let mut candidates1  = Vec::<_>::new();
+    let mut candidates2  = Vec::<_>::new();
+
+    for n in 0..2 {
+        let lc2_val = match n {
+            0 => lc2.0,
+            1 => lc2.1,
+            2 => lc2.2,
+            _ => 0          
+        };
+        let rc1_val = match n {
+            0 => rc1.0,
+            1 => rc1.1,
+            2 => rc1.2,
+            _ => 0        
+        };
+
+        let n = n as i32;
+        if lc2_val - rc1_val > 0 {
+            candidates1.push(generate_candidates(lc2, rc2, Axis::try_from(n).unwrap(), place_dist, corridor_offset));
+            candidates2.push(generate_candidates(rc1, lc1, Axis::try_from(n).unwrap(), place_dist, corridor_offset));
+        } else if lc2_val - rc1_val == 0 {
+            panic!("Rooms have overlapping edges, critical error in BSP room creation function")
+        } else {
+            candidates1.push(generate_candidates(rc2, lc2, Axis::try_from(n).unwrap(), place_dist, corridor_offset));
+            candidates2.push(generate_candidates(lc1, rc1, Axis::try_from(n).unwrap(), place_dist, corridor_offset));
+        }
+
+
     }
 
-    let (lc, rc) = (tree.value.room.unwrap().0, tree.value.room.unwrap().1);
-    //Point P = x_0, y_0, z_0; Normal vector N = <a,b,c>, gen eqn: a(x - x_0) + b(y - y_0) + c(z - z_0) = 0
-    //let left_face_plane = -1(x - lc.0) + 0(y - y0) + 0(z - z0) = 0
 
-    return planes
 }
 
 fn get_groups(root: &BSPNode<Tile>, divisions: i64) {
@@ -174,7 +249,7 @@ fn main() {
     let mut rng = StdRng::seed_from_u64(SEED);
 
     let divisions: i64 = 6;
-    let mut root = BSPNode{ value: Tile{lc: Point3(0,0,0), rc: Point3(2048, 2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_d: SplitAxis::random_variant()};
+    let mut root = BSPNode{ value: Tile{lc: Point3(0,0,0), rc: Point3(2048, 2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_d: Axis::random_variant()};
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
     build_dfs(&root, &mut map, &mut rng);
