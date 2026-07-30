@@ -88,7 +88,7 @@ fn generate_edges(rooms: (Room, Room)) -> () {
 
     //TODO: Implement distance algorithm for each candidate array, ideally in O(k log_k), somehow a hard task
 
-    let mut shortest =  f64::INFINITY;
+    let mut shortest =  i64::MAX;
     let mut shortest_points = (Point3(0,0,0), Point3(0,0,0));
 
     let mut c1 = Vec::<Point3>::new();
@@ -98,7 +98,7 @@ fn generate_edges(rooms: (Room, Room)) -> () {
 
     for e1 in &c1 {
         for e2 in &c2 {
-            let dist = (e1.0 as f64 + e2.0 as f64).powf(2.0) + (e1.1 as f64 + e2.1 as f64).powf(2.0) + (e1.2 as f64 + e2.2 as f64).powf(2.0);
+            let dist = (e1.0 - e2.0).pow(2) + (e1.1 - e2.1).pow(2) + (e1.2 - e2.2).pow(2);
             if dist < shortest {
                 shortest = dist;
                 shortest_points = (*e1, *e2); 
