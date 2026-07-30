@@ -62,25 +62,31 @@ fn construct_room(tile: Tile, rng: &mut StdRng) -> Option<Room> {
         true ))
 }
 
-fn build_dfs(root: &BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
+fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
     
     if root.right != None {
-        build_dfs(root.right.as_deref().unwrap(), map, rng);
-        build_dfs(root.left.as_deref().unwrap(), map, rng);
+        build_dfs(root.right.as_deref_mut().unwrap(), map, rng);
+        build_dfs(root.left.as_deref_mut().unwrap(), map, rng);
         } else {
-        map.tiles.push(Tile{
-            lc: root.value.lc,
-            rc: root.value.rc,
-            traversible: true,
-            split_count: root.value.split_count,
-            room: construct_room(Tile {
+            let r= construct_room(Tile {
                 lc: (root.value.lc),
                 rc: (root.value.rc),
                 traversible: rng.random_bool(2.0 / 3.0),
                 split_count: root.value.split_count,
                 room: None
-            }, rng)
-        })
+            }, rng);
+
+            if r.is_some() {
+                map.tiles.push(Tile{
+            lc: root.value.lc,
+            rc: root.value.rc,
+            traversible: true,
+            split_count: root.value.split_count,
+            room: r.clone(),
+            });
+
+            root.value.room = r;
+        }
     }
 }
 
@@ -97,7 +103,7 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
     };
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
-    build_dfs(&root, &mut map, &mut rng);
+    build_dfs(&mut root, &mut map, &mut rng);
     let l_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
     let r_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
     edge_dfs(&root, divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
@@ -117,12 +123,12 @@ fn main() {
     let mut root = BSPNode{ value: Tile{lc: Point3(0,0,0), rc: Point3(2048, 2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_d: Axis::random_variant()};
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
-    build_dfs(&root, &mut map, &mut rng);
+    build_dfs(&mut root, &mut map, &mut rng);
     let l_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
     let r_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
     edge_dfs(&root, divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
     
-    let tile_json = json!({
+    let map_json = json!({
     "Tiles": &map.tiles.iter().map(|tile| {
 
         let mut tile_json = json!({
@@ -139,13 +145,22 @@ fn main() {
                 })
             };
             tile_json
-        }).collect::<Vec<_>>()
-    });
+        }).collect::<Vec<_>>(),
+    "Edges": EDGES.read().unwrap().iter().map(|edge| {
+        let edge_json = json!({
+            "Start": (edge.1.0, edge.1.1, edge.1.2),
+            "End": (edge.2.0, edge.2.1, edge.2.2)
+        });
+        edge_json
+    }).collect::<Vec<_>>()
+    }
+
+);
 
 // Convert the JSON object to a pretty-printed String
-let tile_json = serde_json::to_string_pretty(&tile_json).unwrap();
+let map_json = serde_json::to_string_pretty(&map_json).unwrap();
 
-    print!("{}", tile_json);
+    print!("{}", map_json);
 }
 
 
