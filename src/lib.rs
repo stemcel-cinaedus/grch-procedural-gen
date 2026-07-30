@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-use std::print;
-use rand::{self, RngExt, random_bool};
-use rand::rng;
+use std::sync::atomic::{Ordering};
+use rand::{self, RngExt};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 //Used for plotting the tiles:
-use serde_json::json;
+//use serde_json::json;
+//use std::print;
 
 pub mod types;
 use crate::types::*;
@@ -13,8 +12,14 @@ pub mod edges;
 use crate::edges::*;
 
 pub const SEED: u64 = 184138956713986453;
+
 pub const PLACE_DIST: i64 = 20;
 pub const CORRIDOR_OFFSET: Point3 = Point3(2, 2, 2);
+
+pub const ABS_DIST_X: i64 = 0;
+pub const ABS_DIST_Y: i64 = 0;
+pub const ABS_DIST_Z: i64 = 0;
+pub const ROOM_SCALE_FACTOR: f64 = 0.05;
 
 
 
@@ -30,7 +35,7 @@ fn split_dfs(root: &mut BSPNode<Tile>, depth: i64) {
     }
 }
 
-fn construct_room(tile: Tile, abs_dist_x: i64, abs_dist_y: i64, abs_dist_z: i64, room_scale_factor: f64, rng: &mut StdRng) -> Option<Room> {
+fn construct_room(tile: Tile, rng: &mut StdRng) -> Option<Room> {
     if tile.traversible == false {
         return None
     }
@@ -41,15 +46,16 @@ fn construct_room(tile: Tile, abs_dist_x: i64, abs_dist_y: i64, abs_dist_z: i64,
     let dist_from_z: i64 = (tile.get_depth() as f64 * rng.random_range(0.0..0.10)) as i64;
 
     return Some(Room(
+        INDEX.fetch_add(1, Ordering::Relaxed),
         Point3(
-            ((tile.lc.0 as f64 + tile.get_width() as f64 * room_scale_factor) as i64 + (abs_dist_x / 2)) + dist_from_x,
-            ((tile.lc.1 as f64 + tile.get_height() as f64 * room_scale_factor)) as i64 + (abs_dist_y / 2) + dist_from_y,
-            ((tile.lc.2 as f64 + tile.get_depth() as f64 * room_scale_factor)) as i64 + (abs_dist_z / 2) + dist_from_z
+            ((tile.lc.0 as f64 + tile.get_width() as f64 * ROOM_SCALE_FACTOR) as i64 + (ABS_DIST_X / 2)) + dist_from_x,
+            ((tile.lc.1 as f64 + tile.get_height() as f64 * ROOM_SCALE_FACTOR)) as i64 + (ABS_DIST_Y / 2) + dist_from_y,
+            ((tile.lc.2 as f64 + tile.get_depth() as f64 * ROOM_SCALE_FACTOR)) as i64 + (ABS_DIST_Z / 2) + dist_from_z
         ),
         Point3(
-            ((tile.rc.0 as f64 - tile.get_width() as f64 * room_scale_factor) as i64 - (abs_dist_x / 2)) - dist_from_x,
-            ((tile.rc.1 as f64 - tile.get_height() as f64 * room_scale_factor)) as i64 - (abs_dist_y / 2) - dist_from_y,
-            ((tile.rc.2 as f64 - tile.get_depth() as f64 * room_scale_factor)) as i64 - (abs_dist_z / 2) - dist_from_z
+            ((tile.rc.0 as f64 - tile.get_width() as f64 * ROOM_SCALE_FACTOR) as i64 - (ABS_DIST_X / 2)) - dist_from_x,
+            ((tile.rc.1 as f64 - tile.get_height() as f64 * ROOM_SCALE_FACTOR)) as i64 - (ABS_DIST_Y / 2) - dist_from_y,
+            ((tile.rc.2 as f64 - tile.get_depth() as f64 * ROOM_SCALE_FACTOR)) as i64 - (ABS_DIST_Z / 2) - dist_from_z
         ),
         true ))
 }
@@ -71,7 +77,7 @@ fn build_dfs(root: &BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
                 traversible: rng.random_bool(2.0 / 3.0),
                 split_count: root.value.split_count,
                 room: None
-            }, 0, 0, 0, 0.05, rng)
+            }, rng)
         })
     }
 }
@@ -99,7 +105,7 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
 
 
 
-fn main() {
+/* fn main() {
     let mut rng = StdRng::seed_from_u64(SEED);
 
     let divisions: i64 = 6;
@@ -120,8 +126,8 @@ fn main() {
 
         if let Some(room) = tile.room {
             tile_json["Room"] = json!({
-                    "Left Corner": (room.0.0, room.0.1, room.0.2 ),
-                    "Right Corner": (room.1.0, room.1.1, room.1.2 )
+                    "Left Corner": (room.1.0, room.1.1, room.1.2 ),
+                    "Right Corner": (room.2.0, room.2.1, room.2.2 )
                 })
             };
             tile_json
@@ -133,6 +139,8 @@ let tile_json = serde_json::to_string_pretty(&tile_json).unwrap();
 
     print!("{}", tile_json);
 }
+
+*/
 
 
 
