@@ -52,7 +52,7 @@ fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis) -> V
     }
 }
 
-fn generate_edges(rooms: (Room, Room)) -> ((usize, Point3, Point3), (usize, Point3, Point3)) {
+fn generate_edges(rooms: (Room, Room)) -> () {
     let (lc1, rc1) = (rooms.0.1, rooms.0.2);
     let (lc2, rc2) = (rooms.1.1, rooms.1.2);
     let indices = (rooms.0.0, rooms.1.0);
@@ -106,13 +106,49 @@ fn generate_edges(rooms: (Room, Room)) -> ((usize, Point3, Point3), (usize, Poin
         }
     }
     let shortest_points = ((indices.0, shortest_points.0, shortest_points.1), (indices.1, shortest_points.0, shortest_points.1));
-    return shortest_points
+    EDGES.write().unwrap().push(shortest_points.0);
+    EDGES.write().unwrap().push(shortest_points.1);
 }
 
-fn get_groups(root: &BSPNode<Tile>, divisions: i64) {
+/*
+
+*/
+
+pub fn edge_dfs(root: &BSPNode<Tile>, divisions: i64, l_rooms: Arc<RwLock<Vec<Room>>>, r_rooms: Arc<RwLock<Vec<Room>>>) {
+    fn leafeon(root: &BSPNode<Tile>, l_rooms: Arc<RwLock<Vec<Room>>>, r_rooms: Arc<RwLock<Vec<Room>>>) {
+        match ((root.left.as_deref().unwrap().value.room), (root.right.as_deref().unwrap().value.room)) {
+            (Some(l), Some(r)) => {
+                generate_edges((l, r));
+                l_rooms.write().unwrap().push(l);
+                r_rooms.write().unwrap().push(r);
+            },
+            (Some(l), None) => {l_rooms.write().unwrap().push(l)},
+            (None, Some(r)) => {r_rooms.write().unwrap().push(r)}
+            (None, None) => ()
+        }
+    }
+
+    if root.right.is_some() && divisions - root.value.split_count > 1 {
+        edge_dfs(&(root.right.as_deref().unwrap()), divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
+        edge_dfs(&(root.left.as_deref().unwrap()), divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
+    } else if root.right.is_some() && divisions - root.value.split_count == 1   {
+        leafeon(root, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
+    } else if !(l_rooms.read().unwrap().is_empty() || r_rooms.read().unwrap().is_empty()) {
+        generate_edges((*l_rooms.read().unwrap().last().unwrap(), *r_rooms.read().unwrap().first().unwrap()));        
+    }
+}
+
+
+
+
+
+
+
+
+    /*
     let mut rooms_in_grandparent = Arc::new(RwLock::new(Vec::<Room>::new()));
 
-    while root.value.split_count > 2 {
+    if root.value.split_count > 2 {
         get_groups(&(root.right.as_deref().unwrap()), divisions);
         get_groups(&(root.left.as_deref().unwrap()), divisions);
     }
@@ -125,7 +161,6 @@ fn get_groups(root: &BSPNode<Tile>, divisions: i64) {
             _ => return (None, None)
         }
     }
-
     //TODO: Use better connection method. Using the first Room found in the grandparent is retarded.
     fn match_get_leaf(root: &BSPNode<Tile>, rooms_in_grandparent: &mut Arc<RwLock<Vec<Room>>>) {
             match get_leaf_rooms(root) {
@@ -155,16 +190,15 @@ fn get_groups(root: &BSPNode<Tile>, divisions: i64) {
         }
     }
 
-    
-
     match_get_leaf(&(root.left.as_deref().unwrap()), &mut rooms_in_grandparent);
     match_get_leaf(&(root.right.as_deref().unwrap()), &mut rooms_in_grandparent);
 
-}
+    //Remaining until working demo: Connect the two parent nodes, connect grandparent nodes
+    */
 
 
-
-fn union_find(rooms: Vec::<Room>) -> i32 {
+/*
+pub fn union_find(rooms: Vec::<Room>) -> i32 {
     let mut vert_map = std::collections::HashMap::new();
 
     rooms.into_iter().scan(-1, |i, room| {
@@ -214,5 +248,5 @@ fn union_find(rooms: Vec::<Room>) -> i32 {
     */
     return 0
 }
-
+*/
 
