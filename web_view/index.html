@@ -102,6 +102,29 @@
             return line;
         }
 
+        function renderEdges(scene, dungeonData) {
+            const positions = dungeonData.edges.flat(Infinity);
+
+            const geometry = new LineSegmentsGeometry();
+            geometry.setPositions(positions);
+
+            const material = new LineMaterial({
+                color: 0xC70000,
+                linewidth: 2,
+                worldUnits: false,
+                dashed: true,
+                alphaToCoverage: true,
+            });
+
+            material.resolution.set(window.innerWidth, window.innerHeight);
+
+            const edgeLines = new LineSegments2(geometry, material);
+            scene.add(edgeLines);
+
+            return edgeLines;
+        }
+
+
         // summon json cube
         async function loadDungeon() {
             document.getElementById('json-upload').addEventListener('change', function(event) {
@@ -141,6 +164,8 @@
                             }
                         });
 
+                        const edgesMesh = renderEdges(scene, data);
+
                         if (minX !== Infinity) {
                             const mapCenterX = (minX + maxX) / 2;
                             const mapCenterY = (minY + maxY) / 2;
@@ -162,6 +187,7 @@
 
         loadDungeon();
 
+        
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
