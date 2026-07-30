@@ -2,9 +2,11 @@ use std::sync::atomic::{Ordering};
 use rand::{self, RngExt};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::sync::{Arc, RwLock};
+
 //Used for plotting the tiles:
-//use serde_json::json;
-//use std::print;
+use serde_json::json;
+use std::print;
 
 pub mod types;
 use crate::types::*;
@@ -96,6 +98,9 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
     build_dfs(&root, &mut map, &mut rng);
+    let l_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
+    let r_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
+    edge_dfs(&root, divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
     
     for tile in map.tiles {
         println!("{:#?} {:#?} {:#?}", tile.lc, tile.rc, tile.traversible)
@@ -105,7 +110,7 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
 
 
 
-/* fn main() {
+fn main() {
     let mut rng = StdRng::seed_from_u64(SEED);
 
     let divisions: i64 = 6;
@@ -113,6 +118,9 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
     build_dfs(&root, &mut map, &mut rng);
+    let l_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
+    let r_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
+    edge_dfs(&root, divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
     
     let tile_json = json!({
     "Tiles": &map.tiles.iter().map(|tile| {
@@ -140,7 +148,7 @@ let tile_json = serde_json::to_string_pretty(&tile_json).unwrap();
     print!("{}", tile_json);
 }
 
-*/
+
 
 
 
