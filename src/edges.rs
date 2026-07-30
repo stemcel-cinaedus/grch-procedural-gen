@@ -14,15 +14,15 @@ fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis) -> V
     match axis {
         Axis::X => {
             //Start at lowest Z & lowest Y value, move along the face of the shape to create more every d distance
-            let y_range = bounding_corner.1 - corner.1;
-            let z_range = bounding_corner.2 - corner.2;
+            let y_range = bounding_corner.1;
+            let z_range = bounding_corner.2;
 
             let y = corner.1;
             let mut z = corner.2;
 
             let mut candidates = Vec::<Point3>::new();
 
-            while y.abs() < (y.abs() + y_range.abs()) && z.abs() < (z.abs() + z_range.abs()) {
+            while y.abs() < (y_range.abs()) && z.abs() < (z_range.abs()) {
                 //TODO: I want to change this to check if it's within bounds first
                 candidates.push(Point3(corner.0, y + CORRIDOR_OFFSET.1 , z + CORRIDOR_OFFSET.2 ));
                 //Currently, I am only placing candidates at the lowest Y level to get a working version first. Later, I will add variable Y as well.
@@ -33,15 +33,15 @@ fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis) -> V
         }, //Add steepness check later
         Axis::Y => {return Vec::<Point3>::new()}, //Add vertical corridors later
         Axis::Z => {
-            let x_range = bounding_corner.0 - corner.0;
-            let y_range = bounding_corner.1 - corner.1;
+            let x_range = bounding_corner.0;
+            let y_range = bounding_corner.1;
             
             let mut x = corner.0;
             let y = corner.1;
             
             let mut candidates = Vec::<Point3>::new();
 
-            while y.abs() < (y.abs() + y_range.abs()) && x.abs() < (x.abs() + x_range.abs()) {
+            while y.abs() < y_range.abs() && x.abs() < x_range.abs() {
                 //TODO: I want to change this to check if it's within bounds first
                 candidates.push(Point3(x + CORRIDOR_OFFSET.0, y + CORRIDOR_OFFSET.1, corner.2));
                 //Currently, I am only placing candidates at the lowest Y level to get a working version first. Later, I will add variable Y as well.
@@ -98,7 +98,7 @@ fn generate_edges(rooms: (Room, Room)) -> () {
 
     for e1 in &c1 {
         for e2 in &c2 {
-            let dist = ((e1.0 as f64 + e2.0 as f64).powf(2.0) + (e1.1 as f64 + e2.1 as f64).powf(2.0) + (e1.2 as f64 + e2.2 as f64).powf(2.0)).sqrt();
+            let dist = (e1.0 as f64 + e2.0 as f64).powf(2.0) + (e1.1 as f64 + e2.1 as f64).powf(2.0) + (e1.2 as f64 + e2.2 as f64).powf(2.0);
             if dist < shortest {
                 shortest = dist;
                 shortest_points = (*e1, *e2); 
