@@ -1,7 +1,6 @@
 use std::ops::*;
-use rand::{RngExt, random_range};
+use rand::{RngExt};
 use rand::rngs::StdRng;
-use rand::rng;
 use rand::SeedableRng;
 use crate::SEED;
 use std::convert::TryFrom;
@@ -28,7 +27,7 @@ impl BSPNode<Tile> {
     pub fn split(&mut self) {
             let rng_factor = rand::random_range(0.3..0.7);
 
-            let next_split = match (self.split_d) {
+            let next_split = match self.split_d {
                             Axis::X => {
                                 if self.value.get_depth() > self.value.get_height() {
                                     Axis::Z
@@ -159,7 +158,6 @@ impl Tile {
     pub fn get_width(&self) -> i64 {
         return self.rc.0 - self.lc.0
     }
-    fn dist_to() {}
 }
 
 pub struct Map {
@@ -191,4 +189,4 @@ impl Add<Point3> for Point3 {
 #[derive(Debug)]
 #[derive(PartialEq)]
 #[derive(Copy, Clone)]
-pub struct Room(pub Point3, pub Point3, pub bool);
+pub struct Room(pub usize, pub Point3, pub Point3, pub bool);
