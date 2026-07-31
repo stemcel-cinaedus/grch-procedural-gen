@@ -1,12 +1,15 @@
+use std::fmt::Alignment::Left;
 use std::sync::atomic::{AtomicUsize};
 use std::sync::{Arc, RwLock};
+
+use rand::random_bool;
 
 use crate::PLACE_DIST;
 use crate::CORRIDOR_OFFSET;
 
 use crate::types::*;
 
-pub static EDGES: RwLock<Vec<(usize, Point3, Point3)>> = RwLock::new(Vec::<(usize, Point3, Point3)>::new());
+pub static EDGES: RwLock<Vec<(Point3, Point3)>> = RwLock::new(Vec::<(Point3, Point3)>::new());
 pub static INDEX: AtomicUsize = AtomicUsize::new(0);
 
 //Make Megumi holes
@@ -52,90 +55,86 @@ fn generate_candidates(corner: Point3, bounding_corner: Point3, axis: Axis) -> V
     }
 }
 
-fn generate_edges(rooms: (Room, Room)) -> () {
-    let (lc1, rc1) = (rooms.0.1, rooms.0.2);
-    let (lc2, rc2) = (rooms.1.1, rooms.1.2);
-    let indices = (rooms.0.0, rooms.1.0);
+fn generate_edges(rooms: (&[Room], &[Room]), axis: Axis, split_pos: Point3) -> () {
+    //Refactor to make it find the rooms with the room positions closest to the split , 
+    //Lazy to implement rn, but basically it would be like match the plane & split point, and then grab the top n rooms on the left that are closest to the split,
+    //grab the top n rooms on the right that are closest to the split, and run generate candidates on them for a total of n*n calculations, saving a lot more resources than just 
+    //checking every possible vertice.
 
-    let mut candidates1  = Vec::<_>::new();
-    let mut candidates2  = Vec::<_>::new();
-
-    for n in 0..2 {
-        let lc2_val = match n {
-            0 => lc2.0,
-            1 => lc2.1,
-            2 => lc2.2,
-            _ => 0          
-        };
-        let rc1_val = match n {
-            0 => rc1.0,
-            1 => rc1.1,
-            2 => rc1.2,
-            _ => 0        
-        };
-
-        let n = n as i32;
-        if lc2_val - rc1_val > 0 {
-            candidates1.push(generate_candidates(lc2, rc2, Axis::try_from(n).unwrap()));
-            candidates2.push(generate_candidates(rc1, lc1, Axis::try_from(n).unwrap()));
-        } else if lc2_val - rc1_val == 0 {
-            panic!("Rooms have overlapping edges, critical error in BSP room creation function")
-        } else {
-            candidates1.push(generate_candidates(rc2, lc2, Axis::try_from(n).unwrap()));
-            candidates2.push(generate_candidates(lc1, rc1, Axis::try_from(n).unwrap()));
-        }
-    }
-
-    //TODO: Implement distance algorithm for each candidate array, ideally in O(k log_k), somehow a hard task
-
-    let mut shortest =  i64::MAX;
-    let mut shortest_points = (Point3(0,0,0), Point3(0,0,0));
-
-    let mut c1 = Vec::<Point3>::new();
-    let mut c2 = Vec::<Point3>::new();
-    candidates1.iter().for_each(|v| c1.extend(v));
-    candidates2.iter().for_each(|v| c2.extend(v));
-
-    for e1 in &c1 {
-        for e2 in &c2 {
-            let dist = (e1.0 - e2.0).pow(2) + (e1.1 - e2.1).pow(2) + (e1.2 - e2.2).pow(2);
-            if dist < shortest {
-                shortest = dist;
-                shortest_points = (*e1, *e2); 
+    fn get_closest(rooms: &[Room], split_pos: Point3, axis: Axis, n: usize) -> impl Iterator<Item = &Room> {
+        
+        //Probably will change "closest_room" to be a tuple or maybe a Vec of length n so that I can grab the 1st, 2nd, etc closest
+        match axis {
+            Axis::X => {
+                let mut closest_rooms: Vec<&Room> = rooms.iter().collect();
+                closest_rooms.sort_by_key(|room| {
+                    return (split_pos.0 - room.1.0).abs().min((split_pos.0 - room.2.0).abs());
+                });
+                return closest_rooms.into_iter().take(n);                
+            }
+            Axis::Y => {
+                let mut closest_rooms: Vec<&Room> = rooms.iter().collect();
+                closest_rooms.sort_by_key(|room| {
+                    return (split_pos.1 - room.1.1).abs().min((split_pos.1 - room.2.1).abs());
+                });
+                return closest_rooms.into_iter().take(n);                
+            }
+            Axis::Z => {
+                let mut closest_rooms: Vec<&Room> = rooms.iter().collect();
+                closest_rooms.sort_by_key(|room| {
+                    return (split_pos.2 - room.1.2).abs().min((split_pos.2 - room.2.2).abs());
+                });
+                return closest_rooms.into_iter().take(n);                
             }
         }
     }
-    let shortest_points = ((indices.0, shortest_points.0, shortest_points.1), (indices.1, shortest_points.0, shortest_points.1));
-    EDGES.write().unwrap().push(shortest_points.0);
-    EDGES.write().unwrap().push(shortest_points.1);
+
+
+
+    //Now the idea is to take the n closest and draw corridors between them
+    //1 for testing currently
+    let mut left_candidates = get_closest(rooms.0, split_pos, axis, 1).map(|room| generate_candidates(room.1, room.2, axis));
+    let mut right_candidates = get_closest(rooms.1, split_pos, axis, 1).map(|room| generate_candidates(room.2, room.1, axis));
+   
+    for (c1, c2) in left_candidates.zip(right_candidates) {
+        let mut shortest =  i64::MAX;
+        let mut shortest_points = (Point3(i64::MAX,i64::MAX,i64::MAX), Point3(i64::MAX,i64::MAX,i64::MAX));
+
+        for e1 in &c1 {
+            for e2 in &c2 {
+                let dist = (e2.0 - e1.0).pow(2) + (e2.1 - e1.1).pow(2) + (e2.2 - e1.2).pow(2);
+                if dist < shortest {
+                    shortest = dist;
+                    shortest_points = (*e1, *e2); 
+                }
+            }
+        }
+        EDGES.write().unwrap().push(shortest_points);
+    }
+
+    //TODO: Implement distance algorithm for each candidate array, ideally in O(k log_k), somehow a hard task
 }
 
 /*
 
 */
 
-pub fn edge_dfs(root: &BSPNode<Tile>, divisions: i64, l_rooms: Arc<RwLock<Vec<Room>>>, r_rooms: Arc<RwLock<Vec<Room>>>) {
-    fn leafeon(root: &BSPNode<Tile>, l_rooms: Arc<RwLock<Vec<Room>>>, r_rooms: Arc<RwLock<Vec<Room>>>) {
-        match ((root.left.as_deref().unwrap().value.room), (root.right.as_deref().unwrap().value.room)) {
-            (Some(l), Some(r)) => {
-                generate_edges((l, r));
-                l_rooms.write().unwrap().push(l);
-                r_rooms.write().unwrap().push(r);
-            },
-            (Some(l), None) => {l_rooms.write().unwrap().push(l)},
-            (None, Some(r)) => {r_rooms.write().unwrap().push(r)}
-            (None, None) => ()
+pub fn edge_dfs(root: &BSPNode<Tile>, divisions: i64) -> Vec<Room> {
+
+    //TRASH DOESNT WORK, NEED TO CHANGE GENERATE EDGES TO TAKE VARIADIC INPUT WITH VECS 
+    let mut left_rooms = Vec::new();
+    let mut right_rooms = Vec::new();
+
+    if divisions - root.value.split_count >= 1 {
+        left_rooms = edge_dfs(&(root.left.as_deref().unwrap()), divisions);
+        right_rooms = edge_dfs(&(root.right.as_deref().unwrap()), divisions);
+        generate_edges((&left_rooms, &right_rooms), root.split_d, (root.left.as_deref().unwrap()).value.rc);  
+    }  else {
+        if root.value.room.is_some() {
+            left_rooms.push(root.value.room.unwrap());
         }
     }
-
-    if root.right.is_some() && divisions - root.value.split_count > 1 {
-        edge_dfs(&(root.right.as_deref().unwrap()), divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
-        edge_dfs(&(root.left.as_deref().unwrap()), divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
-    } else if root.right.is_some() && divisions - root.value.split_count == 1   {
-        leafeon(root, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
-    } else if !(l_rooms.read().unwrap().is_empty() || r_rooms.read().unwrap().is_empty()) {
-        generate_edges((*l_rooms.read().unwrap().last().unwrap(), *r_rooms.read().unwrap().first().unwrap()));        
-    }
+    return left_rooms.into_iter().chain(right_rooms).collect();
 }
 
 
