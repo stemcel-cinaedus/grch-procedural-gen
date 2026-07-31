@@ -1,8 +1,5 @@
-use std::fmt::Alignment::Left;
 use std::sync::atomic::{AtomicUsize};
-use std::sync::{Arc, RwLock};
-
-use rand::random_bool;
+use std::sync::{RwLock};
 
 use crate::PLACE_DIST;
 use crate::CORRIDOR_OFFSET;
@@ -93,8 +90,8 @@ fn generate_edges(rooms: (&[Room], &[Room]), axis: Axis, split_pos: Point3) -> (
 
     //Now the idea is to take the n closest and draw corridors between them
     //1 for testing currently
-    let mut left_candidates = get_closest(rooms.0, split_pos, axis, 1).map(|room| generate_candidates(room.1, room.2, axis));
-    let mut right_candidates = get_closest(rooms.1, split_pos, axis, 1).map(|room| generate_candidates(room.2, room.1, axis));
+    let left_candidates = get_closest(rooms.0, split_pos, axis, 1).map(|room| generate_candidates(room.1, room.2, axis));
+    let right_candidates = get_closest(rooms.1, split_pos, axis, 1).map(|room| generate_candidates(room.2, room.1, axis));
    
     for (c1, c2) in left_candidates.zip(right_candidates) {
         let mut shortest =  i64::MAX;
