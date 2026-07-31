@@ -64,11 +64,8 @@ fn construct_room(tile: Tile, rng: &mut StdRng) -> Option<Room> {
 
 fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
     
-    if root.right != None {
-        build_dfs(root.right.as_deref_mut().unwrap(), map, rng);
-        build_dfs(root.left.as_deref_mut().unwrap(), map, rng);
-        } else {
-            let r= construct_room(Tile {
+    if root.right == None {
+         let r= construct_room(Tile {
                 lc: (root.value.lc),
                 rc: (root.value.rc),
                 traversible: rng.random_bool(2.0 / 3.0),
@@ -87,6 +84,9 @@ fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
 
             root.value.room = r;
         }
+    } else {
+        build_dfs(root.right.as_deref_mut().unwrap(), map, rng);
+        build_dfs(root.left.as_deref_mut().unwrap(), map, rng);       
     }
 }
 
@@ -106,7 +106,7 @@ pub fn initbt(size: Point3, divisions: i64) -> () {
     build_dfs(&mut root, &mut map, &mut rng);
     let l_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
     let r_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
-    edge_dfs(&root, divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
+    edge_dfs(&root, divisions);
     
     for tile in map.tiles {
         println!("{:#?} {:#?} {:#?}", tile.lc, tile.rc, tile.traversible)
@@ -126,7 +126,7 @@ fn main() {
     build_dfs(&mut root, &mut map, &mut rng);
     let l_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
     let r_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
-    edge_dfs(&root, divisions, Arc::clone(&l_rooms), Arc::clone(&r_rooms));
+    edge_dfs(&root, divisions);
     
     let map_json = json!({
     "Tiles": &map.tiles.iter().map(|tile| {
@@ -148,8 +148,8 @@ fn main() {
         }).collect::<Vec<_>>(),
     "Edges": EDGES.read().unwrap().iter().map(|edge| {
         let edge_json = json!({
-            "Start": (edge.1.0, edge.1.1, edge.1.2),
-            "End": (edge.2.0, edge.2.1, edge.2.2)
+            "Start": (edge.0.0, edge.0.1, edge.0.2),
+            "End": (edge.1.0, edge.1.1, edge.1.2)
         });
         edge_json
     }).collect::<Vec<_>>()
