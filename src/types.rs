@@ -104,7 +104,7 @@ impl BSPNode<Tile> {
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub enum Axis {
     X,
     Y,
