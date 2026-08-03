@@ -24,15 +24,15 @@ fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> () {
 
     match axis {
         Axis::X => {
-            let left_mid = Point3(r1.2.0 + ((r1.2.0 - r1.1.0) / 2), r1.2.1 + ((r1.2.1 - r1.1.2) / 2), r1.2.2);
-            let right_mid = Point3(r2.1.0 - ((r2.2.0 - r2.1.0) / 2), r2.1.1 - ((r2.2.1 - r2.1.1) / 2), r2.1.2);
+            let left_mid = Point3(r1.2.0, r1.2.1, r1.2.2);
+            let right_mid = Point3(r2.1.0, r2.1.1, r2.1.2);
 
             EDGES.write().unwrap().push((left_mid, right_mid))
         }, //Add steepness check later
         Axis::Y => {}//DO NOTHING!!!!}, //Add vertical corridors later
         Axis::Z => {
-            let left_mid = Point3(r1.2.0, r1.2.1 + ((r1.2.1 - r1.1.1) / 2), r1.2.2 + ((r1.2.2 - r1.1.2) / 2));
-            let right_mid = Point3(r2.1.0, r2.1.1 - ((r2.2.1 - r2.1.1) / 2), r2.1.2 - ((r2.2.2 - r2.1.2) / 2));
+            let left_mid = Point3(r1.2.0, r1.2.1, r1.2.2);
+            let right_mid = Point3(r2.1.0, r2.1.1, r2.1.2);
 
             EDGES.write().unwrap().push((left_mid, right_mid))
         } 
