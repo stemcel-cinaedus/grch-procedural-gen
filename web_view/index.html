@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D BSP Procedural Generation Visualizer </title>
+    <title>3D BSP Procedural Generation Visualizer</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #1a1a1a; }
         #info {
@@ -15,15 +15,9 @@
             font-family: sans-serif;
             pointer-events: none;
         }
-    </style>
-</head>
-<body>
-    <div id="info">3D BSP Procedural Generation<br/>Left Click: Rotate | Right Click: Pan | Scroll: Zoom</div>
-    <style>
         #json-upload {
-         color: white; 
-            }
-
+            color: white; 
+        }
         #json-upload::file-selector-button {
             color: white;
             background-color: #444;
@@ -33,14 +27,16 @@
             cursor: pointer;
             font-family: sans-serif;
         }
-
         #json-upload::file-selector-button:hover {
             background-color: #555;
         }
     </style>
+</head>
+<body>
+    <div id="info">3D BSP Procedural Generation<br/>Left Click: Rotate | Right Click: Pan | Scroll: Zoom</div>
+    
     <input type="file" id="json-upload" accept=".json" style="position: absolute; top: 50px; width: 100%; text-align: center; z-index: 120;">
 
-    
     <!-- Import map for Three.js -->
     <script type="importmap">
         {
@@ -54,7 +50,6 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
         import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
         import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
         import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
@@ -62,6 +57,15 @@
         const scene = new THREE.Scene();
         // Add some fog to give depth to big boy structure
         scene.fog = new THREE.FogExp2(0x1a1a1a, 0.0002);
+
+        // --- NEW: Add lighting so solid boxes have 3D definition ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); 
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5000, 8000, 3000); // Angle light from above
+        scene.add(directionalLight);
+        // -----------------------------------------------------------
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
         camera.position.set(3000, 3000, 3000);
@@ -74,7 +78,8 @@
         controls.target.set(1024, 1024, 1024);
         controls.update();
 
-        function createWireframeBox(lc, rc, colorHex, opacity = 1.0, thickness = 3) {
+        // --- NEW: Function to generate solid meshes instead of wireframes ---
+        function createSolidBox(lc, rc, colorHex, opacity = 1.0) {
             const width = Math.abs(rc[0] - lc[0]);
             const height = Math.abs(rc[1] - lc[1]);
             const depth = Math.abs(rc[2] - lc[2]);
@@ -83,42 +88,54 @@
             const centerY = (lc[1] + rc[1]) / 2;
             const centerZ = (lc[2] + rc[2]) / 2;
 
-            const lame_geometry = new THREE.BoxGeometry(width, height, depth);
-            const edges = new THREE.EdgesGeometry(lame_geometry);
+            const geometry = new THREE.BoxGeometry(width, height, depth);
             
-            const geometry = new LineSegmentsGeometry().fromEdgesGeometry(edges)
-
-            const material = new LineMaterial({ 
+            // Lambert material reacts to the lights we added earlier
+            const material = new THREE.MeshLambertMaterial({ 
                 color: colorHex,
-                linewidth: thickness,
-                resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
                 transparent: opacity < 1.0,
-                opacity: opacity
+                opacity: opacity,
+                // Setting depthWrite to false for transparent objects prevents them 
+                // from visually blocking other objects drawn behind them
+                depthWrite: opacity === 1.0 
             });
 
-            const line = new LineSegments2(geometry, material);
-            line.position.set(centerX, centerY, centerZ);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(centerX, centerY, centerZ);
             
-            return line;
+            // Tag it so we can easily find and delete it when loading a new file
+            mesh.userData.isDungeonElement = true; 
+            
+            return mesh;
         }
 
         function renderEdges(scene, dungeonData) {
-            const positions = dungeonData.edges.flat(Infinity);
+            const positions = [];
+
+            if (dungeonData.Edges) {
+                dungeonData.Edges.forEach(edge => {
+                    positions.push(...edge.Start);
+                    positions.push(...edge.End);
+                });
+            }
 
             const geometry = new LineSegmentsGeometry();
             geometry.setPositions(positions);
 
             const material = new LineMaterial({
                 color: 0xC70000,
-                linewidth: 2,
+                linewidth: 6,
                 worldUnits: false,
-                dashed: true,
+                dashed: false,
                 alphaToCoverage: true,
+                depthTest: true, 
+                transparent: true
             });
 
             material.resolution.set(window.innerWidth, window.innerHeight);
 
             const edgeLines = new LineSegments2(geometry, material);
+            edgeLines.userData.isDungeonElement = true; // Tag for cleanup
             scene.add(edgeLines);
 
             return edgeLines;
@@ -136,11 +153,17 @@
                     try {
                         const data = JSON.parse(e.target.result);
                     
+                        // --- UPDATED: Cleanup logic based on userData tag ---
                         const objectsToRemove = [];
                         scene.traverse((child) => {
-                            if (child.isLineSegments2) objectsToRemove.push(child);
+                            if (child.userData.isDungeonElement) objectsToRemove.push(child);
                         });
-                        objectsToRemove.forEach(obj => scene.remove(obj));
+                        objectsToRemove.forEach(obj => {
+                            scene.remove(obj);
+                            // Dispose geometry/materials to prevent memory leaks in WebGL
+                            if(obj.geometry) obj.geometry.dispose();
+                            if(obj.material) obj.material.dispose();
+                        });
 
                         let minX = Infinity, minY = Infinity, minZ = Infinity;
                         let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -153,13 +176,15 @@
                         const tiles = data.Tiles || [];
                         tiles.forEach(tile => {
                             if (tile['Left Corner'] && tile['Right Corner']) {
-                                const partition = createWireframeBox(tile['Left Corner'], tile['Right Corner'], 0x555555, 0.3, 2);
+                                // Draw BSP partition at 15% opacity so we can see inside
+                                const partition = createSolidBox(tile['Left Corner'], tile['Right Corner'], 0x555555, 0.15);
                                 scene.add(partition);
                                 expandBounds(tile['Left Corner']);
                                 expandBounds(tile['Right Corner']);
                             }
                             if (tile.Room && tile.Room['Left Corner'] && tile.Room['Right Corner']) {
-                                const room = createWireframeBox(tile.Room['Left Corner'], tile.Room['Right Corner'], 0x0088ff, 1.0, 3);
+                                // Draw Solid Room
+                                const room = createSolidBox(tile.Room['Left Corner'], tile.Room['Right Corner'], 0x0088ff, 1.0);
                                 scene.add(room);
                             }
                         });
