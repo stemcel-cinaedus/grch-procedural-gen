@@ -12,7 +12,6 @@ pub struct BSPNode<T> {
     pub value: T,
     pub left: Option<Box<BSPNode<T>>>,
     pub right: Option<Box<BSPNode<T>>>,
-    pub room: Option<Room>,
     pub split_d: Axis
 }
 
@@ -70,7 +69,6 @@ impl BSPNode<Tile> {
                         },
                         left:  None,
                         right: None,
-                        room:  None,
                         split_d: next_split.clone()
                     }));
                     
@@ -94,7 +92,6 @@ impl BSPNode<Tile> {
                         },
                         left:  None,
                         right: None,
-                        room:  None,
                         split_d: next_split
                 }));
             }
@@ -144,7 +141,7 @@ pub struct Tile {
     pub lc: Point3,
     pub rc: Point3,
     pub traversible: bool,
-    pub split_count: i64,
+    pub split_count: u32,
     pub room: Option<Room>
 }
 

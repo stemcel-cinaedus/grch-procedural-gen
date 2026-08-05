@@ -1,8 +1,8 @@
 use std::sync::atomic::{Ordering};
+use bumpalo::Bump;
 use rand::{self, RngExt};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use std::sync::{Arc, RwLock};
 
 //Used for plotting the tiles:
 use serde_json::json;
@@ -21,13 +21,13 @@ pub const CORRIDOR_OFFSET: Point3 = Point3(2, 2, 2);
 pub const ABS_DIST_X: i64 = 0;
 pub const ABS_DIST_Y: i64 = 0;
 pub const ABS_DIST_Z: i64 = 0;
-pub const ROOM_SCALE_FACTOR: f64 = 0.05;
+pub const ROOM_SCALE_FACTOR: f64 = 0.08;
 
 
 
 
 
-fn split_dfs(root: &mut BSPNode<Tile>, depth: i64) {
+fn split_dfs(root: &mut BSPNode<Tile>, depth: u32) {
     if root.value.split_count < depth {
         root.split();
         split_dfs(root.right.as_mut().unwrap(), depth);
@@ -91,42 +91,41 @@ fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
 }
 
 
-pub fn initbt(size: Point3, divisions: i64) -> () {
+pub fn initbt(size: Point3, divisions: u32) -> () {
     let mut rng = StdRng::seed_from_u64(SEED);
 
     let mut root = BSPNode{
         value: Tile{lc: Point3(0, 0, 0), rc: size, traversible: false, split_count: 0, room: None},
         right: None,
         left: None,
-        room: None,
         split_d: Axis::random_variant()
     };
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
     build_dfs(&mut root, &mut map, &mut rng);
-    let l_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
-    let r_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
-    edge_dfs(&root, divisions);
+
+    let arena = Bump::new();
+
+   edge_dfs(&root, divisions, &arena);
     
     for tile in map.tiles {
         println!("{:#?} {:#?} {:#?}", tile.lc, tile.rc, tile.traversible)
     }
 }
 
-
-
-
 fn main() {
     let mut rng = StdRng::seed_from_u64(SEED);
 
-    let divisions: i64 = 6;
-    let mut root = BSPNode{ value: Tile{lc: Point3(0,0,0), rc: Point3(2048, 2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, room: None, split_d: Axis::random_variant()};
+    let divisions: u32 = 6;
+    let mut root = BSPNode{ value: Tile{lc: Point3(0,0,0), rc: Point3(2048, 2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, split_d: Axis::random_variant()};
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
     build_dfs(&mut root, &mut map, &mut rng);
-    let l_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
-    let r_rooms = Arc::new(RwLock::new(Vec::<Room>::new()));
-    edge_dfs(&root, divisions);
+
+    let arena = Bump::new();
+
+    edge_dfs(&root, divisions, &arena);
+
     
     let map_json = json!({
     "Tiles": &map.tiles.iter().map(|tile| {
