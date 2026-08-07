@@ -1,5 +1,7 @@
+use core::panic;
 use std::sync::atomic::{AtomicUsize};
 use std::sync::{RwLock};
+use std::todo;
 use bumpalo::Bump;
 use bumpalo::collections::Vec as BumpVec;
 
@@ -8,11 +10,11 @@ use crate::CORRIDOR_OFFSET;
 
 use crate::types::*;
 
-pub static EDGES: RwLock<Vec<(Point3, Point3)>> = RwLock::new(Vec::<(Point3, Point3)>::new());
+pub static EDGES: RwLock<Vec<(Point3, Point3, Axis)>> = RwLock::new(Vec::<(Point3, Point3, Axis)>::new());
 pub static INDEX: AtomicUsize = AtomicUsize::new(0);
 
 //Make Megumi holes
-fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3)> {
+fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3, Axis)> {
     /*
     //Possible methods to avoid O(n^2) calculations:
     -- Take the Vector of nodes you have and calculate its midpoint (prefix sums/DP is an obvious optimization). From that midpoint, create an "expanding zone" that
@@ -24,7 +26,7 @@ fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3)> {
      - closest to the center of the cluster (or the split point) on each side, and then just connecting them.
     */
 
-    let mut edges = Vec::<(Point3, Point3)>::new();
+    //TODO: "Change the necessary functions to avoid this vec allocation. It's only like this for testing.";
 
     match axis {
         Axis::X => {
@@ -34,8 +36,9 @@ fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3)> {
             let right_mid = Point3(r2.1.0,
                 r2.1.1 + ((r2.2.1 - r2.1.1) / 2), 
                 r2.1.2 + ((r2.2.2 - r2.1.2) / 2));
-
-            edges.push((left_mid, right_mid))
+            
+            EDGES.write().unwrap().push((left_mid, right_mid, axis));
+            return vec!((left_mid, right_mid, axis))
         }, //Add steepness check later
         Axis::Y => {
             let left_mid = Point3(r1.2.0 - ((r1.2.0 - r1.1.0) / 2),
@@ -45,8 +48,9 @@ fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3)> {
                 r2.1.1,
                 r2.1.2 + ((r2.2.2 - r2.1.2) / 2));
 
-            edges.push((left_mid, right_mid))
-        }//DO NOTHING!!!!}, //Add vertical corridors later
+            EDGES.write().unwrap().push((left_mid, right_mid, axis));
+            return vec!((left_mid, right_mid, axis))
+        }
         Axis::Z => {
             let left_mid = Point3(r1.2.0  - ((r1.2.0 - r1.1.0) / 2),
                 r1.2.1 - ((r1.2.1 - r1.1.1) / 2), 
@@ -55,10 +59,10 @@ fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3)> {
                 r2.1.1 + ((r2.2.1 - r2.1.1) / 2), 
                 r2.1.2);
 
-            edges.push((left_mid, right_mid))
+            EDGES.write().unwrap().push((left_mid, right_mid, axis));
+            return vec!((left_mid, right_mid, axis))
         } 
     }
-    return edges
 }
 
 fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) -> () {
@@ -104,26 +108,78 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
 
 */
 
-pub fn orthogonal_paths(edges: Vec<(Point3, Point3)>) -> Vec<(Point3, Point3)> {
+pub fn orthogonal_paths(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Point3, Axis)> {
     let delta: f64 = 0.5;
     let mut new_edges = Vec::new();
 
     //Take all the edges and do something something something -> now there are orthogonal paths :D
     for e in edges.iter() { 
-        let mut k = delta;
-        let dx = (e.1.0 - e.0.0) as f64;
-        let dy = (e.1.1 - e.0.1) as f64;
-        let dz = (e.1.2 - e.0.2) as f64;
-        while k <= 1.0 {
-            //There is probably a more efficient way to do this, but I am not really conscious right now so this is the best you will get
-            let ex = (e.0, Point3(e.0.0 + (dx * k) as i64, e.0.1, e.0.2));
-            let ey = (ex.1, Point3(ex.1.0, ex.1.1 + (dy * k) as i64, ex.1.2));
-            let ez = (ey.1, Point3(ey.1.0, ey.1.1, ey.1.2 + (dz * k) as i64));
+        let mut k = 0.0;
+        let mut dx = (e.1.0 - e.0.0) as f64;
+        let mut dy = (e.1.1 - e.0.1) as f64;
+        let mut dz = (e.1.2 - e.0.2) as f64;
 
+        let mut ex = *e;
+        let mut ey = *e;
+        let mut ez = (e.0, e.0, e.2);
+
+        let delta_o;
+
+        //Take the axis the edges are split on, subtract the offset for that axis from Δₐₓᵢₛ (call this δₓ), start the corridor from a new edge that goes e₀ to 1/2 δₓ, then do the Orthogonal
+        //path like normal, and then add another 1/2 δₓ to the end of that path to touch the face of the shape
+
+        
+
+        
+        match e.2 {
+            Axis::X => {
+                delta_o = dx / 5.0;
+                dx = 4.0 * (dx / 5.0);
+                ez = (ez.0, Point3(ez.0.0 + (delta_o / 2.0) as i64, ez.0.1, ez.0.2), ez.2);
+                new_edges.push(ez);
+
+            },
+            Axis::Y => {
+                delta_o = dy / 5.0;
+                dy = 4.0 * (dy / 5.0);
+                ez = (ez.0, Point3(ez.0.0, ez.0.1 + (delta_o / 2.0) as i64, ez.0.2), ez.2);
+                new_edges.push(ez);
+
+            },
+            Axis::Z => {
+                delta_o = dz / 5.0;
+                dz = 4.0 * (dz / 5.0);
+                ez = (ez.0, Point3(ez.0.0, ez.0.1, ez.0.2 + (delta_o / 2.0) as i64), ez.2);
+                new_edges.push(ez);
+
+            }
+        }
+        
+        while k < 1.0 {
+            //There is probably a more efficient way to do this, but I am not really conscious right now so this is the best you will get
+            ex = (ez.1, Point3(ez.1.0 + (dx * delta) as i64, ez.1.1, ez.1.2), e.2);
+            ey = (ex.1, Point3(ex.1.0, ex.1.1 + (dy * delta) as i64, ex.1.2), e.2);
+            ez = (ey.1, Point3(ey.1.0, ey.1.1, ey.1.2 + (dz * delta) as i64), e.2);
+
+            k += delta;
             new_edges.push(ex);
             new_edges.push(ey);
             new_edges.push(ez);
-            k += delta;
+        }
+
+        match e.2 {
+            Axis::X => {
+                ez = (ez.1, Point3(ez.1.0 + (delta_o / 2.0) as i64, ex.1.1, ez.1.2), ez.2);
+                new_edges.push(ez);
+            }
+            Axis::Y => {
+                ez = (ez.1, Point3(ez.1.0, ex.1.1  + (delta_o / 2.0) as i64, ez.1.2), ez.2);
+                new_edges.push(ez);
+            }
+            Axis::Z => {
+                ez = (ez.1, Point3(ez.1.0, ex.1.1, ez.1.2 + (delta_o / 2.0) as i64), ez.2);
+                new_edges.push(ez);
+            }
         }
     }
 
