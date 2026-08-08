@@ -16,7 +16,7 @@ use crate::edges::*;
 pub const SEED: u64 = 184138956713986453;
 
 pub const PLACE_DIST: i64 = 20;
-pub const CORRIDOR_OFFSET: Point3 = Point3(2, 2, 2);
+pub const CORRIDOR_OFFSET: Point3 = Point3(10, 4, 2);
 
 pub const ABS_DIST_X: i64 = 0;
 pub const ABS_DIST_Y: i64 = 0;
@@ -106,7 +106,12 @@ pub fn initbt(size: Point3, divisions: u32) -> () {
 
     let arena = Bump::new();
 
-   edge_dfs(&root, divisions, &arena);
+    edge_dfs(&root, divisions, &arena);
+
+    //TEMPORARY call to delay a refactor of the call chain in edges.rs
+    let mut e = orthogonal_paths(EDGES.read().unwrap().to_vec());
+    EDGES.write().unwrap().clear();
+    EDGES.write().unwrap().append(&mut e);
     
     for tile in map.tiles {
         println!("{:#?} {:#?} {:#?}", tile.lc, tile.rc, tile.traversible)
@@ -125,6 +130,11 @@ fn main() {
     let arena = Bump::new();
 
     edge_dfs(&root, divisions, &arena);
+
+    //TEMPORARY call to delay a refactor of the call chain in edges.rs
+    let mut e = orthogonal_paths(EDGES.read().unwrap().to_vec());
+    EDGES.write().unwrap().clear();
+    EDGES.write().unwrap().append(&mut e);
 
     
     let map_json = json!({

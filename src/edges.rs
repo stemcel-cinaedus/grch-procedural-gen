@@ -14,7 +14,7 @@ pub static EDGES: RwLock<Vec<(Point3, Point3, Axis)>> = RwLock::new(Vec::<(Point
 pub static INDEX: AtomicUsize = AtomicUsize::new(0);
 
 //Make Megumi holes
-fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3, Axis)> {
+fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> (Point3, Point3, Axis) {
     /*
     //Possible methods to avoid O(n^2) calculations:
     -- Take the Vector of nodes you have and calculate its midpoint (prefix sums/DP is an obvious optimization). From that midpoint, create an "expanding zone" that
@@ -37,8 +37,7 @@ fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3, Axis
                 r2.1.1 + ((r2.2.1 - r2.1.1) / 2), 
                 r2.1.2 + ((r2.2.2 - r2.1.2) / 2));
             
-            EDGES.write().unwrap().push((left_mid, right_mid, axis));
-            return vec!((left_mid, right_mid, axis))
+            return (left_mid, right_mid, axis)
         }, //Add steepness check later
         Axis::Y => {
             let left_mid = Point3(r1.2.0 - ((r1.2.0 - r1.1.0) / 2),
@@ -48,8 +47,8 @@ fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3, Axis
                 r2.1.1,
                 r2.1.2 + ((r2.2.2 - r2.1.2) / 2));
 
-            EDGES.write().unwrap().push((left_mid, right_mid, axis));
-            return vec!((left_mid, right_mid, axis))
+            //EDGES.write().unwrap().push((left_mid, right_mid, axis));
+            return (left_mid, right_mid, axis)
         }
         Axis::Z => {
             let left_mid = Point3(r1.2.0  - ((r1.2.0 - r1.1.0) / 2),
@@ -59,8 +58,8 @@ fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> Vec<(Point3, Point3, Axis
                 r2.1.1 + ((r2.2.1 - r2.1.1) / 2), 
                 r2.1.2);
 
-            EDGES.write().unwrap().push((left_mid, right_mid, axis));
-            return vec!((left_mid, right_mid, axis))
+            //EDGES.write().unwrap().push((left_mid, right_mid, axis));
+            return (left_mid, right_mid, axis)
         } 
     }
 }
@@ -94,7 +93,7 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
         }
     });
 
-    orthogonal_paths(corridor_rooms(left_closest.0, right_closest.0, axis)).iter().for_each(|e| EDGES.write().unwrap().push(*e));  
+    EDGES.write().unwrap().push(corridor_rooms(left_closest.0, right_closest.0, axis));  
 
 
     //Now I should decide how exactly I want to find the rooms closest to the centers.
@@ -109,6 +108,8 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
 */
 
 pub fn orthogonal_paths(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Point3, Axis)> {
+    //TODO: Fix vector pass chain so that a function in edges.rs calls orthogonal rooms
+
     let delta: f64 = 0.5;
     let mut new_edges = Vec::new();
 
@@ -127,9 +128,6 @@ pub fn orthogonal_paths(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Poin
 
         //Take the axis the edges are split on, subtract the offset for that axis from Δₐₓᵢₛ (call this δₓ), start the corridor from a new edge that goes e₀ to 1/2 δₓ, then do the Orthogonal
         //path like normal, and then add another 1/2 δₓ to the end of that path to touch the face of the shape
-
-        
-
         
         match e.2 {
             Axis::X => {
@@ -169,15 +167,15 @@ pub fn orthogonal_paths(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Poin
 
         match e.2 {
             Axis::X => {
-                ez = (ez.1, Point3(ez.1.0 + (delta_o / 2.0) as i64, ex.1.1, ez.1.2), ez.2);
+                ez = (ez.1, Point3(ez.1.0 + (delta_o / 2.0) as i64, ez.1.1, ez.1.2), ez.2);
                 new_edges.push(ez);
             }
             Axis::Y => {
-                ez = (ez.1, Point3(ez.1.0, ex.1.1  + (delta_o / 2.0) as i64, ez.1.2), ez.2);
+                ez = (ez.1, Point3(ez.1.0, ez.1.1 + (delta_o / 2.0) as i64, ez.1.2), ez.2);
                 new_edges.push(ez);
             }
             Axis::Z => {
-                ez = (ez.1, Point3(ez.1.0, ex.1.1, ez.1.2 + (delta_o / 2.0) as i64), ez.2);
+                ez = (ez.1, Point3(ez.1.0, ez.1.1, ez.1.2 + (delta_o / 2.0) as i64), ez.2);
                 new_edges.push(ez);
             }
         }
