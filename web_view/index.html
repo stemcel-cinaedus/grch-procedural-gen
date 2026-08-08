@@ -37,7 +37,6 @@
     
     <input type="file" id="json-upload" accept=".json" style="position: absolute; top: 50px; width: 100%; text-align: center; z-index: 120;">
 
-    <!-- Import map for Three.js -->
     <script type="importmap">
         {
             "imports": {
@@ -50,22 +49,17 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
-        import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-        import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 
         const scene = new THREE.Scene();
         // Add some fog to give depth to big boy structure
         scene.fog = new THREE.FogExp2(0x1a1a1a, 0.0002);
 
-        // --- NEW: Add lighting so solid boxes have 3D definition ---
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); 
         scene.add(ambientLight);
 
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(5000, 8000, 3000); // Angle light from above
         scene.add(directionalLight);
-        // -----------------------------------------------------------
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
         camera.position.set(3000, 3000, 3000);
@@ -78,7 +72,6 @@
         controls.target.set(1024, 1024, 1024);
         controls.update();
 
-        // --- NEW: Function to generate solid meshes instead of wireframes ---
         function createSolidBox(lc, rc, colorHex, opacity = 1.0) {
             const width = Math.abs(rc[0] - lc[0]);
             const height = Math.abs(rc[1] - lc[1]);
@@ -90,56 +83,32 @@
 
             const geometry = new THREE.BoxGeometry(width, height, depth);
             
-            // Lambert material reacts to the lights we added earlier
             const material = new THREE.MeshLambertMaterial({ 
                 color: colorHex,
                 transparent: opacity < 1.0,
                 opacity: opacity,
-                // Setting depthWrite to false for transparent objects prevents them 
-                // from visually blocking other objects drawn behind them
                 depthWrite: opacity === 1.0 
             });
 
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(centerX, centerY, centerZ);
             
-            // Tag it so we can easily find and delete it when loading a new file
             mesh.userData.isDungeonElement = true; 
             
             return mesh;
         }
 
-        function renderEdges(scene, dungeonData) {
-            const positions = [];
+    function renderEdges(scene, dungeonData) {
+    if (dungeonData.Edges) {
+        dungeonData.Edges.forEach(edge => {
+            const lc = edge.Start;
+            const rc = edge.End;
 
-            if (dungeonData.Edges) {
-                dungeonData.Edges.forEach(edge => {
-                    positions.push(...edge.Start);
-                    positions.push(...edge.End);
-                });
-            }
-
-            const geometry = new LineSegmentsGeometry();
-            geometry.setPositions(positions);
-
-            const material = new LineMaterial({
-                color: 0xC70000,
-                linewidth: 6,
-                worldUnits: false,
-                dashed: false,
-                alphaToCoverage: true,
-                depthTest: true, 
-                transparent: true
-            });
-
-            material.resolution.set(window.innerWidth, window.innerHeight);
-
-            const edgeLines = new LineSegments2(geometry, material);
-            edgeLines.userData.isDungeonElement = true; // Tag for cleanup
-            scene.add(edgeLines);
-
-            return edgeLines;
-        }
+            const corridorBox = createSolidBox(lc, rc, 0xC70000, 1.0);
+            scene.add(corridorBox);
+        });
+    }
+}
 
 
         // summon json cube
@@ -153,14 +122,12 @@
                     try {
                         const data = JSON.parse(e.target.result);
                     
-                        // --- UPDATED: Cleanup logic based on userData tag ---
                         const objectsToRemove = [];
                         scene.traverse((child) => {
                             if (child.userData.isDungeonElement) objectsToRemove.push(child);
                         });
                         objectsToRemove.forEach(obj => {
                             scene.remove(obj);
-                            // Dispose geometry/materials to prevent memory leaks in WebGL
                             if(obj.geometry) obj.geometry.dispose();
                             if(obj.material) obj.material.dispose();
                         });
@@ -176,20 +143,19 @@
                         const tiles = data.Tiles || [];
                         tiles.forEach(tile => {
                             if (tile['Left Corner'] && tile['Right Corner']) {
-                                // Draw BSP partition at 15% opacity so we can see inside
+                                // draw BSP partition at 15% opacity to see inside
                                 const partition = createSolidBox(tile['Left Corner'], tile['Right Corner'], 0x555555, 0.15);
                                 scene.add(partition);
                                 expandBounds(tile['Left Corner']);
                                 expandBounds(tile['Right Corner']);
                             }
                             if (tile.Room && tile.Room['Left Corner'] && tile.Room['Right Corner']) {
-                                // Draw Solid Room
                                 const room = createSolidBox(tile.Room['Left Corner'], tile.Room['Right Corner'], 0x0088ff, 1.0);
                                 scene.add(room);
                             }
                         });
 
-                        const edgesMesh = renderEdges(scene, data);
+                        renderEdges(scene, data);
 
                         if (minX !== Infinity) {
                             const mapCenterX = (minX + maxX) / 2;
