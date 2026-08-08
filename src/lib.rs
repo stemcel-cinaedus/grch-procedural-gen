@@ -18,6 +18,8 @@ pub const SEED: u64 = 184138956713986453;
 pub const PLACE_DIST: i64 = 20;
 pub const CORRIDOR_OFFSET: Point3 = Point3(10, 4, 2);
 
+pub const CORRIDOR_WIDTH: i64 = 20;
+
 pub const ABS_DIST_X: i64 = 0;
 pub const ABS_DIST_Y: i64 = 0;
 pub const ABS_DIST_Z: i64 = 0;
@@ -109,6 +111,7 @@ pub fn initbt(size: Point3, divisions: u32) -> () {
     let mut e = orthogonal_paths(EDGES.read().unwrap().to_vec());
     EDGES.write().unwrap().clear();
     EDGES.write().unwrap().append(&mut e);
+    let mut meowmeow = create_corridors(EDGES.read().unwrap().to_vec());
     
     for tile in map.tiles {
         println!("{:#?} {:#?} {:#?}", tile.lc, tile.rc, tile.traversible)
@@ -132,6 +135,7 @@ fn main() {
     let mut e = orthogonal_paths(EDGES.read().unwrap().to_vec());
     EDGES.write().unwrap().clear();
     EDGES.write().unwrap().append(&mut e);
+    let mut meowmeow = create_corridors(EDGES.read().unwrap().to_vec());
 
     
     let map_json = json!({
@@ -152,12 +156,12 @@ fn main() {
             };
             tile_json
         }).collect::<Vec<_>>(),
-    "Edges": EDGES.read().unwrap().iter().map(|edge| {
-        let edge_json = json!({
+    "Edges": meowmeow.iter().map(|edge| {
+        let corridor_json = json!({
             "Start": (edge.0.0, edge.0.1, edge.0.2),
             "End": (edge.1.0, edge.1.1, edge.1.2)
         });
-        edge_json
+        corridor_json
     }).collect::<Vec<_>>()
     }
 

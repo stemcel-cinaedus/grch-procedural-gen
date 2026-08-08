@@ -6,17 +6,15 @@ use bumpalo::Bump;
 use bumpalo::collections::Vec as BumpVec;
 
 use crate::PLACE_DIST;
-use crate::CORRIDOR_OFFSET;
 
-use crate::{ABS_DIST_X, ABS_DIST_Y, ABS_DIST_Z, ROOM_SCALE_FACTOR};
+use crate::CORRIDOR_WIDTH;
 
 use crate::types::*;
 
 pub static EDGES: RwLock<Vec<(Point3, Point3, Axis)>> = RwLock::new(Vec::<(Point3, Point3, Axis)>::new());
 pub static INDEX: AtomicUsize = AtomicUsize::new(0);
 
-//Make Megumi holes
-fn corridor_rooms(r1: &Room, r2: &Room, axis: Axis) -> (Point3, Point3, Axis) {
+fn edge_rooms(r1: &Room, r2: &Room, axis: Axis) -> (Point3, Point3, Axis) {
     /*
     //Possible methods to avoid O(n^2) calculations:
     -- Take the Vector of nodes you have and calculate its midpoint (prefix sums/DP is an obvious optimization). From that midpoint, create an "expanding zone" that
@@ -95,7 +93,7 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
         }
     });
 
-    EDGES.write().unwrap().push(corridor_rooms(left_closest.0, right_closest.0, axis));  
+    EDGES.write().unwrap().push(edge_rooms(left_closest.0, right_closest.0, axis));  
 
 
     //Now I should decide how exactly I want to find the rooms closest to the centers.
@@ -112,12 +110,8 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
 pub fn orthogonal_paths(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Point3, Axis)> {
     //TODO: Fix vector pass chain so that a function in edges.rs calls orthogonal rooms
     //TODO 2: Bound the paths using the values used in room construction so that clipping through a room is impossible
-    /*
-    A possible solution is 
-
-    */
-
-    let delta: f64 = 0.5;
+    
+    let delta: f64 = 1.0;
     let mut new_edges = Vec::new();
 
     //Take all the edges and do something something something -> now there are orthogonal paths :D
@@ -189,6 +183,18 @@ pub fn orthogonal_paths(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Poin
     }
 
     return new_edges
+}
+
+pub fn create_corridors(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Point3)> {
+    //Incomplete, needs math to fill in gaps between corridor boxes (if there is a Y offset, you will just be able to see inside from the gap)
+
+    let mut boxes = Vec::<(Point3, Point3)>::new();
+    for e in edges {
+        let c1 = Point3(e.0.0 - CORRIDOR_WIDTH, e.0.1 - CORRIDOR_WIDTH, e.0.2 - CORRIDOR_WIDTH);
+        let c2 = Point3(e.1.0 + CORRIDOR_WIDTH, e.1.1 + CORRIDOR_WIDTH, e.1.2 + CORRIDOR_WIDTH);
+        boxes.push((c1, c2)); 
+    }
+    boxes
 }
 
 pub fn edge_dfs<'a>(root: &'a BSPNode<Tile>, divisions: u32, arena: &'a Bump) -> BumpVec<'a, &'a Room> {
