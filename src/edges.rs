@@ -8,6 +8,8 @@ use bumpalo::collections::Vec as BumpVec;
 use crate::PLACE_DIST;
 use crate::CORRIDOR_OFFSET;
 
+use crate::{ABS_DIST_X, ABS_DIST_Y, ABS_DIST_Z, ROOM_SCALE_FACTOR};
+
 use crate::types::*;
 
 pub static EDGES: RwLock<Vec<(Point3, Point3, Axis)>> = RwLock::new(Vec::<(Point3, Point3, Axis)>::new());
@@ -109,6 +111,11 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
 
 pub fn orthogonal_paths(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Point3, Axis)> {
     //TODO: Fix vector pass chain so that a function in edges.rs calls orthogonal rooms
+    //TODO 2: Bound the paths using the values used in room construction so that clipping through a room is impossible
+    /*
+    A possible solution is 
+
+    */
 
     let delta: f64 = 0.5;
     let mut new_edges = Vec::new();
@@ -131,22 +138,22 @@ pub fn orthogonal_paths(edges: Vec<(Point3, Point3, Axis)>) -> Vec<(Point3, Poin
         
         match e.2 {
             Axis::X => {
-                delta_o = dx / 5.0;
-                dx = 4.0 * (dx / 5.0);
+                delta_o = dx / 4.0;
+                dx = 3.0 * (dx / 4.0);
                 ez = (ez.0, Point3(ez.0.0 + (delta_o / 2.0) as i64, ez.0.1, ez.0.2), ez.2);
                 new_edges.push(ez);
 
             },
             Axis::Y => {
-                delta_o = dy / 5.0;
-                dy = 4.0 * (dy / 5.0);
+                delta_o = dy / 4.0;
+                dy = 3.0 * (dy / 4.0);
                 ez = (ez.0, Point3(ez.0.0, ez.0.1 + (delta_o / 2.0) as i64, ez.0.2), ez.2);
                 new_edges.push(ez);
 
             },
             Axis::Z => {
-                delta_o = dz / 5.0;
-                dz = 4.0 * (dz / 5.0);
+                delta_o = dz / 4.0;
+                dz = 3.0 * (dz / 4.0);
                 ez = (ez.0, Point3(ez.0.0, ez.0.1, ez.0.2 + (delta_o / 2.0) as i64), ez.2);
                 new_edges.push(ez);
 

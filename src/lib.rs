@@ -21,10 +21,8 @@ pub const CORRIDOR_OFFSET: Point3 = Point3(10, 4, 2);
 pub const ABS_DIST_X: i64 = 0;
 pub const ABS_DIST_Y: i64 = 0;
 pub const ABS_DIST_Z: i64 = 0;
+pub const ROOM_RANDOM_VARIABILITY: f64 = 0.05;
 pub const ROOM_SCALE_FACTOR: f64 = 0.08;
-
-
-
 
 
 fn split_dfs(root: &mut BSPNode<Tile>, depth: u32) {
@@ -42,10 +40,9 @@ fn construct_room(tile: Tile, rng: &mut StdRng) -> Option<Room> {
         return None
     }
 
-    //ABSOLUTE MESS rn, I need to add the random % movement as a function parameter as well. Works, but makes me feel illiterate
-    let dist_from_x: i64 = (tile.get_width() as f64 * rng.random_range(0.0..0.10)) as i64;
-    let dist_from_y: i64 = (tile.get_height() as f64 * rng.random_range(0.0..0.10)) as i64;
-    let dist_from_z: i64 = (tile.get_depth() as f64 * rng.random_range(0.0..0.10)) as i64;
+    let dist_from_x: i64 = (tile.get_width() as f64 * rng.random_range(0.0..ROOM_RANDOM_VARIABILITY)) as i64;
+    let dist_from_y: i64 = (tile.get_height() as f64 * rng.random_range(0.0..ROOM_RANDOM_VARIABILITY)) as i64;
+    let dist_from_z: i64 = (tile.get_depth() as f64 * rng.random_range(0.0..ROOM_RANDOM_VARIABILITY)) as i64;
 
     return Some(Room(
         INDEX.fetch_add(1, Ordering::Relaxed),
