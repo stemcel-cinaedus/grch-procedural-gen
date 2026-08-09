@@ -3,6 +3,8 @@ use bumpalo::Bump;
 use rand::{self, RngExt};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::fs::File;
+use std::io::Write;
 
 //Used for plotting the tiles:
 use serde_json::json;
@@ -12,6 +14,8 @@ pub mod types;
 use crate::types::*;
 pub mod edges;
 use crate::edges::*;
+pub mod obj;
+use crate::obj::*;
 
 pub const SEED: u64 = 184138956713986453;
 
@@ -37,7 +41,7 @@ fn split_dfs(root: &mut BSPNode<Tile>, depth: u32) {
     }
 }
 
-fn construct_room(tile: Tile, rng: &mut StdRng) -> Option<Room> {
+fn construct_room(tile: Tile, rng: &mut StdRng, obj_data: &mut String, mut v: usize) -> Option<Room> {
     if tile.traversible == false {
         return None
     }
@@ -46,7 +50,7 @@ fn construct_room(tile: Tile, rng: &mut StdRng) -> Option<Room> {
     let dist_from_y: i64 = (tile.get_height() as f64 * rng.random_range(0.0..ROOM_RANDOM_VARIABILITY)) as i64;
     let dist_from_z: i64 = (tile.get_depth() as f64 * rng.random_range(0.0..ROOM_RANDOM_VARIABILITY)) as i64;
 
-    return Some(Room(
+    let room = Room(
         INDEX.fetch_add(1, Ordering::Relaxed),
         Point3(
             ((tile.lc.0 as f64 + tile.get_width() as f64 * ROOM_SCALE_FACTOR) as i64 + (ABS_DIST_X / 2)) + dist_from_x,
@@ -58,10 +62,14 @@ fn construct_room(tile: Tile, rng: &mut StdRng) -> Option<Room> {
             ((tile.rc.1 as f64 - tile.get_height() as f64 * ROOM_SCALE_FACTOR)) as i64 - (ABS_DIST_Y / 2) - dist_from_y,
             ((tile.rc.2 as f64 - tile.get_depth() as f64 * ROOM_SCALE_FACTOR)) as i64 - (ABS_DIST_Z / 2) - dist_from_z
         ),
-        true ))
+        true );
+
+    add_obj_box(room.1, room.2, obj_data, v);
+    return Some(room);
+
 }
 
-fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
+fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng, obj_data: &mut String, mut v: usize) -> () {
     
     if root.right == None {
          let r= construct_room(Tile {
@@ -70,7 +78,7 @@ fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
                 traversible: rng.random_bool(2.0 / 3.0),
                 split_count: root.value.split_count,
                 room: None
-            }, rng);
+            }, rng, obj_data, v);
 
             if r.is_some() {
                 map.tiles.push(Tile{
@@ -84,11 +92,10 @@ fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng) -> () {
             root.value.room = r;
         }
     } else {
-        build_dfs(root.right.as_deref_mut().unwrap(), map, rng);
-        build_dfs(root.left.as_deref_mut().unwrap(), map, rng);       
+        build_dfs(root.right.as_deref_mut().unwrap(), map, rng, obj_data, v);
+        build_dfs(root.left.as_deref_mut().unwrap(), map, rng, obj_data, v);       
     }
 }
-
 
 pub fn initbt(size: Point3, divisions: u32) -> () {
     let mut rng = StdRng::seed_from_u64(SEED);
@@ -99,11 +106,18 @@ pub fn initbt(size: Point3, divisions: u32) -> () {
         left: None,
         split_d: Axis::random_variant()
     };
+
+    //Need to change build_dfs to add the rooms and edge_dfs to add the corridors to the obj
+    let mut obj_data = create_obj();
+    let mut v: usize = 0;
+
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
-    build_dfs(&mut root, &mut map, &mut rng);
+    build_dfs(&mut root, &mut map, &mut rng, &mut obj_data, v);
 
     let arena = Bump::new();
+
+    
 
     edge_dfs(&root, divisions, &arena);
 
@@ -112,20 +126,33 @@ pub fn initbt(size: Point3, divisions: u32) -> () {
     EDGES.write().unwrap().clear();
     EDGES.write().unwrap().append(&mut e);
     let mut meowmeow = create_corridors(EDGES.read().unwrap().to_vec());
+
+    //Looks a little weird, v is just an index used inside the box function
     
-    for tile in map.tiles {
-        println!("{:#?} {:#?} {:#?}", tile.lc, tile.rc, tile.traversible)
+    for e in meowmeow {
+        v = add_obj_box(e.0, e.1, &mut obj_data, v);
     }
+
+    let mut file = File::create("grch_export.obj").expect("Failed to create file");
+    file.write_all(obj_data.as_bytes()).expect("Failed to write to file");
+    println!("OBJ file exported");
+
 }
+
 
 fn main() {
     let mut rng = StdRng::seed_from_u64(SEED);
 
     let divisions: u32 = 6;
     let mut root = BSPNode{ value: Tile{lc: Point3(0,0,0), rc: Point3(2048, 2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, split_d: Axis::random_variant()};
+    
+    let mut obj_data = create_obj();
+    let mut v: usize = 0;
+
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
-    build_dfs(&mut root, &mut map, &mut rng);
+    build_dfs(&mut root, &mut map, &mut rng, &mut obj_data, v);
+    
 
     let arena = Bump::new();
 
@@ -137,7 +164,15 @@ fn main() {
     EDGES.write().unwrap().append(&mut e);
     let mut meowmeow = create_corridors(EDGES.read().unwrap().to_vec());
 
-    
+    for e in meowmeow {
+        v = add_obj_box(e.0, e.1, &mut obj_data, v);
+    }
+
+    let mut file = File::create("grch_export.obj").expect("Failed to create file");
+    file.write_all(obj_data.as_bytes()).expect("Failed to write to file");
+    println!("OBJ file exported");
+
+    /* 
     let map_json = json!({
     "Tiles": &map.tiles.iter().map(|tile| {
 
@@ -171,6 +206,7 @@ fn main() {
 let map_json = serde_json::to_string_pretty(&map_json).unwrap();
 
     print!("{}", map_json);
+*/
 }
 
 
