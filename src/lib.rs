@@ -1,4 +1,5 @@
-use std::sync::atomic::{Ordering};
+use std::sync::atomic::Ordering::Relaxed;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use bumpalo::Bump;
 use rand::{self, RngExt};
 use rand::rngs::StdRng;
@@ -18,6 +19,7 @@ pub mod obj;
 use crate::obj::*;
 
 pub const SEED: u64 = 184138956713986453;
+pub static INDEX: AtomicUsize = AtomicUsize::new(0);
 
 pub const PLACE_DIST: i64 = 20;
 pub const CORRIDOR_OFFSET: Point3 = Point3(10, 4, 2);
@@ -30,12 +32,15 @@ pub const ABS_DIST_Z: i64 = 0;
 pub const ROOM_RANDOM_VARIABILITY: f64 = 0.05;
 pub const ROOM_SCALE_FACTOR: f64 = 0.08;
 
+//Chance of a room being in any given tile
+pub const ROOM_CHANCE: f64 = 2.0 / 3.0;
 
-fn split_dfs(root: &mut BSPNode<Tile>, depth: u32) {
+
+fn split_dfs(root: &mut BSPNode<Tile>, depth: u32, rng: &mut StdRng) {
     if root.value.split_count < depth {
-        root.split();
-        split_dfs(root.right.as_mut().unwrap(), depth);
-        split_dfs(root.left.as_mut().unwrap(), depth);
+        root.split(rng);
+        split_dfs(root.right.as_mut().unwrap(), depth, rng);
+        split_dfs(root.left.as_mut().unwrap(), depth, rng);
     } else {
         return
     }
@@ -51,7 +56,7 @@ fn construct_room(tile: Tile, rng: &mut StdRng, obj_data: &mut String, mut v: us
     let dist_from_z: i64 = (tile.get_depth() as f64 * rng.random_range(0.0..ROOM_RANDOM_VARIABILITY)) as i64;
 
     let room = Room(
-        INDEX.fetch_add(1, Ordering::Relaxed),
+        tile.index,
         Point3(
             ((tile.lc.0 as f64 + tile.get_width() as f64 * ROOM_SCALE_FACTOR) as i64 + (ABS_DIST_X / 2)) + dist_from_x,
             ((tile.lc.1 as f64 + tile.get_height() as f64 * ROOM_SCALE_FACTOR)) as i64 + (ABS_DIST_Y / 2) + dist_from_y,
@@ -69,56 +74,65 @@ fn construct_room(tile: Tile, rng: &mut StdRng, obj_data: &mut String, mut v: us
 
 }
 
-fn build_dfs(root: &mut BSPNode<Tile>, map: &mut Map, rng: &mut StdRng, obj_data: &mut String, mut v: usize) -> () {
+fn build_dfs(root: &mut BSPNode<Tile>, tvec: &mut Vec<Tile>, rng: &mut StdRng, obj_data: &mut String, mut v: usize) -> () {
     
     if root.right == None {
-         let r= construct_room(Tile {
-                lc: (root.value.lc),
-                rc: (root.value.rc),
-                traversible: rng.random_bool(2.0 / 3.0),
-                split_count: root.value.split_count,
-                room: None
-            }, rng, obj_data, v);
+            let r= construct_room( root.value, rng, obj_data, v);
 
             if r.is_some() {
-                map.tiles.push(Tile{
+                tvec.push(Tile{
+            index: root.value.index,
             lc: root.value.lc,
             rc: root.value.rc,
             traversible: true,
             split_count: root.value.split_count,
-            room: r.clone(),
+            room: r,
             });
 
             root.value.room = r;
         }
     } else {
-        build_dfs(root.right.as_deref_mut().unwrap(), map, rng, obj_data, v);
-        build_dfs(root.left.as_deref_mut().unwrap(), map, rng, obj_data, v);       
+        build_dfs(root.right.as_deref_mut().unwrap(), tvec, rng, obj_data, v);
+        build_dfs(root.left.as_deref_mut().unwrap(), tvec, rng, obj_data, v);       
     }
 }
 
 pub fn initbt(size: Point3, divisions: u32) -> () {
+    //TODO: Refactor corridor creation to route between gaps in-between rooms. This is what map will be used for, it will keep multiple vecs containing the position of any given tile if the array was sorted
     let mut rng = StdRng::seed_from_u64(SEED);
 
     let mut root = BSPNode{
-        value: Tile{lc: Point3(0, 0, 0), rc: size, traversible: false, split_count: 0, room: None},
+        value: Tile{index: INDEX.fetch_add(1, Relaxed), lc: Point3(0, 0, 0), rc: size, traversible: false, split_count: 0, room: None},
         right: None,
         left: None,
         split_d: Axis::random_variant()
     };
 
-    //Need to change build_dfs to add the rooms and edge_dfs to add the corridors to the obj
     let mut obj_data = create_obj();
     let mut v: usize = 0;
+    let mut tvec = Vec::<Tile>::new();
 
-    split_dfs(&mut root, divisions);
-    let mut map = Map{tiles: Vec::<Tile>::new()};
-    build_dfs(&mut root, &mut map, &mut rng, &mut obj_data, v);
+    split_dfs(&mut root, divisions, &mut rng);
+    build_dfs(&mut root, &mut tvec, &mut rng, &mut obj_data, v);
+
+    //This needs to be made into a loop that works regardless of how many dimensions there are, but this will do for now
+    //TODO NEXT: Use sorted tile map to route the manhattan paths between the guaranteed space between rooms.
+    //Find an efficient way to do this, the naïve approach is to just use a bunch of conditionals.
+    let mut map = Vec::<Vec<(usize, i64, i64)>>::new();
+
+    
+    tvec.sort_by(|t1, t2| t1.rc.0.cmp(&t2.rc.0));
+    map.push(tvec.iter().map(|t| (t.index, t.lc.0, t.rc.0)).collect());
+    tvec.sort_by(|t1, t2| t1.rc.1.cmp(&t2.rc.1));
+    map.push(tvec.iter().map(|t| (t.index, t.lc.1, t.rc.1)).collect());
+    tvec.sort_by(|t1, t2| t1.rc.2.cmp(&t2.rc.2));
+    map.push(tvec.iter().map(|t| (t.index, t.lc.2, t.rc.2)).collect());
+
+
 
     let arena = Bump::new();
 
     
-
     edge_dfs(&root, divisions, &arena);
 
     //TEMPORARY call to delay a refactor of the call chain in edges.rs
@@ -139,7 +153,7 @@ pub fn initbt(size: Point3, divisions: u32) -> () {
 
 }
 
-
+/*
 fn main() {
     let mut rng = StdRng::seed_from_u64(SEED);
 
@@ -151,7 +165,7 @@ fn main() {
 
     split_dfs(&mut root, divisions);
     let mut map = Map{tiles: Vec::<Tile>::new()};
-    build_dfs(&mut root, &mut map, &mut rng, &mut obj_data, v);
+    build_dfs(&mut root, &mut tvec, &mut rng, &mut obj_data, v);
     
 
     let arena = Bump::new();
@@ -171,44 +185,9 @@ fn main() {
     let mut file = File::create("grch_export.obj").expect("Failed to create file");
     file.write_all(obj_data.as_bytes()).expect("Failed to write to file");
     println!("OBJ file exported");
-
-    /* 
-    let map_json = json!({
-    "Tiles": &map.tiles.iter().map(|tile| {
-
-        let mut tile_json = json!({
-            "Left Corner": (tile.lc.0, tile.lc.1, tile.lc.2 ),
-            "Right Corner": (tile.rc.0, tile.rc.1, tile.rc.2 ),
-            "traversible": tile.traversible,
-            "split_count": tile.split_count,
-            });
-
-        if let Some(room) = tile.room {
-            tile_json["Room"] = json!({
-                    "Left Corner": (room.1.0, room.1.1, room.1.2 ),
-                    "Right Corner": (room.2.0, room.2.1, room.2.2 )
-                })
-            };
-            tile_json
-        }).collect::<Vec<_>>(),
-    "Edges": meowmeow.iter().map(|edge| {
-        let corridor_json = json!({
-            "Start": (edge.0.0, edge.0.1, edge.0.2),
-            "End": (edge.1.0, edge.1.1, edge.1.2)
-        });
-        corridor_json
-    }).collect::<Vec<_>>()
-    }
-
-);
-
-// Convert the JSON object to a pretty-printed String
-let map_json = serde_json::to_string_pretty(&map_json).unwrap();
-
-    print!("{}", map_json);
-*/
 }
 
+*/
 
 
 

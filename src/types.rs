@@ -1,8 +1,10 @@
 use std::ops::*;
-use rand::{RngExt};
+use std::sync::atomic::Ordering;
+use rand::{RngExt, SeedableRng};
 use rand::rngs::StdRng;
-use rand::SeedableRng;
 use crate::SEED;
+use crate::INDEX;
+use crate::ROOM_CHANCE;
 use std::convert::TryFrom;
 
 
@@ -23,7 +25,7 @@ impl BSPNode<Tile> {
     //Refactor WIP: Point2 -> Point3, creating new splitting algorithm
 
 
-    pub fn split(&mut self) {
+    pub fn split(&mut self, rng: &mut StdRng) {
             let rng_factor = rand::random_range(0.3..0.7);
 
             let next_split = match self.split_d {
@@ -53,6 +55,7 @@ impl BSPNode<Tile> {
                 None => {
                     self.left = Some(Box::from(BSPNode{
                         value: Tile {
+                            index: INDEX.fetch_add(1, Ordering::Relaxed),
                             lc: self.value.lc,
                             rc: { 
                                 if self.split_d == Axis::Z {
@@ -63,7 +66,7 @@ impl BSPNode<Tile> {
                                     Point3(self.value.rc.0 - (self.value.get_width() as f64 * rng_factor) as i64, self.value.rc.1, self.value.rc.2)
                                 }
                             },
-                            traversible: false,
+                            traversible: rng.random_bool(ROOM_CHANCE),
                             split_count: (self.value.split_count + 1),
                             room: None
                         },
@@ -74,8 +77,7 @@ impl BSPNode<Tile> {
                     
                 self.right = Some(Box::from(BSPNode{
                         value: Tile { 
-                            //Add conditional to make the tiles squares instead of line segments
-                            
+                            index: INDEX.fetch_add(1, Ordering::Relaxed),
                             lc: {
                                 if self.split_d == Axis::Z {
                                     Point3(self.value.lc.0, self.value.lc.1, self.left.as_ref().unwrap().value.rc.2)
@@ -86,7 +88,7 @@ impl BSPNode<Tile> {
                                 }
                             },
                             rc: self.value.rc,
-                            traversible: false,
+                            traversible: rng.random_bool(ROOM_CHANCE),
                             split_count: (self.value.split_count + 1),
                             room: None
                         },
@@ -138,6 +140,7 @@ impl TryFrom<i32> for Axis {
 #[derive(Copy, Clone)]
 
 pub struct Tile {
+    pub index: usize,
     pub lc: Point3,
     pub rc: Point3,
     pub traversible: bool,
@@ -155,10 +158,6 @@ impl Tile {
     pub fn get_width(&self) -> i64 {
         return self.rc.0 - self.lc.0
     }
-}
-
-pub struct Map {
-    pub tiles: Vec<Tile>,
 }
 
 #[derive(Debug)]

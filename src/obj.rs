@@ -1,5 +1,5 @@
 use crate::types::*;
-use crate::edges::*;
+// use crate::edges::*;
 
 pub fn create_obj() -> String {
     return String::from("#OBJ file exported by grch-procedural-gen\n o grchDungeon\n")
