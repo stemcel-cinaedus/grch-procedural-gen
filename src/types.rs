@@ -166,6 +166,12 @@ impl Tile {
 
 pub struct Point3(pub i64, pub i64, pub i64);
 
+impl Point3 {
+    pub fn sum(&self) -> i64 {
+        return &self.0 + &self.1 + &self.2
+    }
+}
+
 impl Sub<Point3> for Point3 {
     type Output = Point3;
 

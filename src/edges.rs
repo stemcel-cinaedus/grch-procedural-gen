@@ -1,10 +1,12 @@
 use core::panic;
+use std::ops::Bound;
 use std::sync::atomic::{AtomicUsize};
 use std::sync::{RwLock};
 use std::todo;
 use bumpalo::Bump;
 use bumpalo::collections::Vec as BumpVec;
 
+use crate::types::Axis::Y;
 use crate::{PLACE_DIST, ROOM_SCALE_FACTOR};
 use crate::CORRIDOR_WIDTH;
 
@@ -93,7 +95,7 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
 
 */
 
-pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<(usize, i64, i64)>>) -> Vec<(usize, Point3, Point3, Axis)> {
+pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<(usize, Point3, Point3)>>) -> Vec<(usize, Point3, Point3, Axis)> {
     //TODO: Fix vector pass chain so that a function in edges.rs calls orthogonal rooms
     //TODO 2: Bound the paths using the values used in room construction so that clipping through a room is impossible
 
@@ -126,11 +128,11 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
         let mut free_space = Vec::<i64>::new(); 
         let start_pos = e.1;
 
-        for v in &map {
-            //The span of the tile that contains the room minus the span of the room
-            let bounds = (v[e.0].2 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64 - v[e.0].1 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64) - (v[e.0].2 - v[e.0].1);
-            free_space.push(bounds);
-        }
+            //The span of the tile that cnontains the room minus the span of the room
+            //Wrote this while I was sleep deprived, bounds needs to be a Point3 (that contains the maximum allowed variance for each dimension)
+        [e.1, e.2].iter().for_each(|(l, r)| {
+                let bounds = (r * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64 - l * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64) - (r - l);
+                free_space.push(bounds); } );
 
        //Math might be fucked now becase refactor
         
@@ -140,6 +142,26 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                 dx = 3.0 * (dx / 4.0);
                 ez = (ez.0, ez.1, Point3(ez.1.0 + (delta_o / 2.0) as i64, ez.1.1, ez.1.2), ez.3);
                 new_edges.push(ez);
+
+                while k < 1.0 {
+                    ex = (ez.0, ez.2, Point3(ez.2.0 + (dx * delta) as i64, ez.2.1, ez.2.2), e.3);
+                    //Here I need to add checks for Y and Z
+                    //If ey.y + delta_o > starting_y + bounds.y: ey.y = starting_y + bounds.y + 1 //This will allow me to assume that the value won't already be intersecting when the next bounds are queried
+                    let y_change = ex.2.1 +  (dy * delta) as i64;
+                    
+                    if y_change > start_pos.1 + free_space[1] {
+                        //If this doesn't work, double check that tile bounds are allowed to overlap
+                        let r = map[1].iter().filter(|t| t.1.1 == y_change + free_space[1] || t.2.1 == y_change + free_space[1]).min_by_key(|t| (e.1.sum().pow(2) + e.1.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2)));
+                        let start_pos
+                    }
+                    ey = (ez.0, ex.2, Point3(ex.2.0, ex.2.1 + (dy * delta) as i64, ex.2.2), e.3);
+                    ez = (ez.0, ey.2, Point3(ey.2.0, ey.2.1, ey.2.2 + (dz * delta) as i64), e.3);
+
+                    k += delta;
+                    new_edges.push(ex);
+                    new_edges.push(ey);
+                    new_edges.push(ez);
+                }
 
             },
             Axis::Y => {
@@ -159,7 +181,13 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
         }
         
         while k < 1.0 {
-            //There is probably a more efficient way to do this, but I am not really conscious right now so this is the best you will get
+            //So now add a check to see if the difference between the current room and the start is no longer in the bounds of the tile, and if it is, switch to the next tile
+            /* 
+            The best way to avoid collision is to look at the LC & RC of the room in the current tile/bounds and just compare distance in whichever dimension. 
+            This won't prevent us from intersecting the target room, because we can avoid checking on the split plane altogether 
+            (if there is an intersection when the path only moves across one dimension, this is the distance function's fault, and not to be worried about here).
+            This requires 2 conditionals for each segment added: Checking that it doesn't intersect the room in the current tile space, and checking if it has entered a new tile space.
+            */
             ex = (ez.0, ez.2, Point3(ez.2.0 + (dx * delta) as i64, ez.2.1, ez.2.2), e.3);
             ey = (ez.0, ex.2, Point3(ex.2.0, ex.2.1 + (dy * delta) as i64, ex.2.2), e.3);
             ez = (ez.0, ey.2, Point3(ey.2.0, ey.2.1, ey.2.2 + (dz * delta) as i64), e.3);

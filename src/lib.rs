@@ -118,15 +118,16 @@ pub fn initbt(size: Point3, divisions: u32) -> () {
     //This needs to be made into a loop that works regardless of how many dimensions there are, but this will do for now
     //TODO NEXT: Use sorted tile map to route the manhattan paths between the guaranteed space between rooms.
     //Find an efficient way to do this, the naïve approach is to just use a bunch of conditionals.
-    let mut map = Vec::<Vec<(usize, i64, i64)>>::new();
+    let mut map = Vec::<Vec<(usize, Point3, Point3)>>::new();
 
-    
+    //Map of vectors of the form:
+    // (index: u64, left_corner: Point3, right_corner: point3) 
     tvec.sort_by(|t1, t2| t1.rc.0.cmp(&t2.rc.0));
-    map.push(tvec.iter().map(|t| (t.index, t.lc.0, t.rc.0)).collect());
+    map.push(tvec.iter().map(|t| (t.index, t.lc, t.rc)).collect());
     tvec.sort_by(|t1, t2| t1.rc.1.cmp(&t2.rc.1));
-    map.push(tvec.iter().map(|t| (t.index, t.lc.1, t.rc.1)).collect());
+    map.push(tvec.iter().map(|t| (t.index, t.lc, t.rc)).collect());
     tvec.sort_by(|t1, t2| t1.rc.2.cmp(&t2.rc.2));
-    map.push(tvec.iter().map(|t| (t.index, t.lc.2, t.rc.2)).collect());
+    map.push(tvec.iter().map(|t| (t.index, t.lc, t.rc)).collect());
 
 
 
