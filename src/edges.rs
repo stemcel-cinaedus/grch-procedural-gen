@@ -1,13 +1,10 @@
 use core::panic;
-use std::ops::Bound;
 use std::sync::atomic::{AtomicUsize};
 use std::sync::{RwLock};
-use std::todo;
 use bumpalo::Bump;
 use bumpalo::collections::Vec as BumpVec;
 
-use crate::types::Axis::Y;
-use crate::{PLACE_DIST, ROOM_SCALE_FACTOR};
+use crate::{ROOM_SCALE_FACTOR};
 use crate::CORRIDOR_WIDTH;
 
 use crate::types::*;
@@ -91,22 +88,13 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
     //TODO: Implement distance algorithm for each candidate array, ideally in O(k log_k), somehow a hard task
 }
 
-/*
-
-*/
-
 pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<(usize, Point3, Point3)>>) -> Vec<(usize, Point3, Point3, Axis)> {
     //TODO: Fix vector pass chain so that a function in edges.rs calls orthogonal rooms
-    //TODO 2: Bound the paths using the values used in room construction so that clipping through a room is impossible
-
-    //
     
     let delta: f64 = 1.0;
     let mut new_edges = Vec::new();
 
-    //Take all the edges and do something something something -> now there are orthogonal paths :D
-    for e in edges.iter() { 
-        let mut k = 0.0;
+    for e in edges.iter() {
         let mut dx = (e.2.0 - e.1.0) as f64;
         let mut dy = (e.2.1 - e.1.1) as f64;
         let mut dz = (e.2.2 - e.1.2) as f64;
@@ -116,18 +104,10 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
         let mut ez = (e.0, e.1, e.1, e.3);
 
         let delta_o;
-
-       //Edges now have the index of the room they start from, so this function can be refactored to do lattice routing
-       //I am not sure how to do it without spamming conditionals, however.
-       //The map vec has vecs sorted by psoition in the vec's respective dimension, so as long as the index of the current room is known, it will be easy to look at the dimensions of the next room.
-
-        //Take edge, find room edge is from in the map vectors, calculate the maximum allowed space, if the space is exceeded, find which room's space the edge is now in, and work based off that
-        //Remember that the stored positions in map are the right corners of the room
-
         let mut start_pos = e.1;
 
-            //The span of the tile that cnontains the room minus the span of the room
-            //Wrote this while I was sleep deprived, bounds needs to be a Point3 (that contains the maximum allowed variance for each dimension)
+        //The span of the tile that cnontains the room minus the span of the room
+        //Should not be treated as an actual point
         fn get_free_space(lc: Point3, rc: Point3) -> Point3 {
                 let b0 = (rc.0 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64 - lc.0 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64) - (rc.0 - lc.0);
                 let b1 = (rc.1 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64 - lc.1 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64) - (rc.1 - lc.1);
@@ -141,30 +121,36 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
         match e.3 {
             Axis::X => {
                 //Add check to ensure delta_o movement doesn't escape bounds 
-                delta_o = dx / 4.0;
-                dx = 3.0 * (dx / 4.0);
-                ez = (ez.0, ez.1, Point3(ez.1.0 + (delta_o / 2.0) as i64, ez.1.1, ez.1.2), ez.3);
+                delta_o = (dx / 4.0) as i64;
+                dx -= delta_o as f64;
+                ez = (ez.0, ez.1, Point3(ez.1.0 + delta_o / 2, ez.1.1, ez.1.2), ez.3);
                 new_edges.push(ez);
 
 
             },
             Axis::Y => {
-                delta_o = dy / 4.0;
-                dy = 3.0 * (dy / 4.0);
-                ez = (ez.0, ez.1, Point3(ez.1.0, ez.1.1 + (delta_o / 2.0) as i64, ez.1.2), ez.3);
+                delta_o = (dy / 4.0) as i64;
+                dy -= delta_o as f64;
+                ez = (ez.0, ez.1, Point3(ez.1.0, ez.1.1 + (delta_o / 2), ez.1.2), ez.3);
                 new_edges.push(ez);
 
             },
             Axis::Z => {
-                delta_o = dz / 4.0;
-                dz = 3.0 * (dz / 4.0);
-                ez = (ez.0, ez.1, Point3(ez.1.0, ez.1.1, ez.1.2 + (delta_o / 2.0) as i64), ez.3);
+                delta_o = (dz / 4.0) as i64;
+                dz -= delta_o as f64;
+                ez = (ez.0, ez.1, Point3(ez.1.0, ez.1.1, ez.1.2 + (delta_o / 2)), ez.3);
                 new_edges.push(ez);
 
             }
         }
         
-        while k < 1.0 {
+        let target: Point3 = match e.3 {
+            Axis::X => Point3(e.2.0 - (delta_o / 2), e.2.1, e.2.2),
+            Axis::Y => Point3(e.2.0, e.2.1 - (delta_o / 2), e.2.2),
+            Axis::Z => Point3(e.2.0, e.2.1, e.2.2 - (delta_o / 2)),
+        };
+
+        while ez.2 != target {
 
             //X bounds check
             let x_change = ez.2.0 +  (dx * delta) as i64;
@@ -172,7 +158,7 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                 //If this doesn't work, double check that tile bounds are allowed to overlap
                 let r = map[0].iter()
                         .filter(|t| t.1.0 == x_change + free_space.0 || t.2.0 == x_change + free_space.0)
-                        .min_by_key(|t| (e.1.sum().pow(2) + e.1.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2)));
+                        .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
                         None => panic!("No room found with bounds that match queried bounds! Critical error in pathing function!")
@@ -189,10 +175,9 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
             //Y bounds check
             let y_change = ex.2.1 +  (dy * delta) as i64;
             if y_change > start_pos.1 + free_space.1 {
-                //If this doesn't work, double check that tile bounds are allowed to overlap
                 let r = map[1].iter()
                         .filter(|t| t.1.1 == y_change + free_space.1 || t.2.1 == y_change + free_space.1)
-                        .min_by_key(|t| (e.1.sum().pow(2) + e.1.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2)));
+                        .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
                         None => panic!("No room found with bounds that match queried bounds! Critical error in pathing function!")
@@ -209,10 +194,9 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
             //Z bounds check
             let z_change = ey.2.2 +  (dz * delta) as i64;
             if z_change > start_pos.2 + free_space.2 {
-                //If this doesn't work, double check that tile bounds are allowed to overlap
                 let r = map[2].iter()
                         .filter(|t| t.1.2 == z_change + free_space.2 || t.2.2 == z_change + free_space.2)
-                        .min_by_key(|t| (e.1.sum().pow(2) + e.1.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2)));
+                        .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
                         None => panic!("No room found with bounds that match queried bounds! Critical error in pathing function!")
@@ -220,13 +204,11 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
 
                 start_pos = Point3(ey.2.0, ey.2.1, start_pos.2 + free_space.2);
                 free_space = get_free_space(r.1, r.2);
-                dy += (y_change - free_space.1) as f64;
+                dz += (z_change - free_space.2) as f64;
 
             }
             ez = (ez.0, ey.2, Point3(ey.2.0, ey.2.1, ey.2.2 + (dz * delta) as i64), e.3);
 
-            //Change k loop so it doesn't end early.
-            k += delta;
             new_edges.push(ex);
             new_edges.push(ey);
             new_edges.push(ez);
@@ -234,15 +216,15 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
 
         match e.3 {
             Axis::X => {
-                ez = (ez.0, ez.2, Point3(ez.2.0 + (delta_o / 2.0) as i64, ez.2.1, ez.2.2), ez.3);
+                ez = (ez.0, ez.2, Point3(ez.2.0 + (delta_o / 2), ez.2.1, ez.2.2), ez.3);
                 new_edges.push(ez);
             }
             Axis::Y => {
-                ez = (ez.0, ez.2, Point3(ez.2.0, ez.2.1 + (delta_o / 2.0) as i64, ez.2.2), ez.3);
+                ez = (ez.0, ez.2, Point3(ez.2.0, ez.2.1 + (delta_o / 2), ez.2.2), ez.3);
                 new_edges.push(ez);
             }
             Axis::Z => {
-                ez = (ez.0, ez.2, Point3(ez.2.0, ez.2.1, ez.2.2 + (delta_o / 2.0) as i64), ez.3);
+                ez = (ez.0, ez.2, Point3(ez.2.0, ez.2.1, ez.2.2 + (delta_o / 2)), ez.3);
                 new_edges.push(ez);
             }
         }

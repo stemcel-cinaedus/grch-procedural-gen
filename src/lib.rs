@@ -137,10 +137,10 @@ pub fn initbt(size: Point3, divisions: u32) -> () {
     edge_dfs(&root, divisions, &arena);
 
     //TEMPORARY call to delay a refactor of the call chain in edges.rs
-    let mut e = orthogonal_paths(EDGES.read().unwrap().to_vec());
+    let mut e = orthogonal_paths(EDGES.read().unwrap().to_vec(), map);
     EDGES.write().unwrap().clear();
     EDGES.write().unwrap().append(&mut e);
-    let mut meowmeow = create_corridors(EDGES.read().unwrap().to_vec());
+    let meowmeow = create_corridors(EDGES.read().unwrap().to_vec());
 
     //Looks a little weird, v is just an index used inside the box function
     
