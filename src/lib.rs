@@ -8,8 +8,6 @@ use std::fs::File;
 use std::io::Write;
 
 //Used for plotting the tiles:
-use serde_json::json;
-use std::print;
 
 pub mod types;
 use crate::types::*;
@@ -23,7 +21,6 @@ pub static INDEX: AtomicUsize = AtomicUsize::new(0);
 
 pub const PLACE_DIST: i64 = 20;
 pub const CORRIDOR_OFFSET: Point3 = Point3(10, 4, 2);
-
 pub const CORRIDOR_WIDTH: i64 = 20;
 
 pub const ABS_DIST_X: i64 = 0;
@@ -34,6 +31,8 @@ pub const ROOM_SCALE_FACTOR: f64 = 0.08;
 
 //Chance of a room being in any given tile
 pub const ROOM_CHANCE: f64 = 2.0 / 3.0;
+
+pub const SIZE: Point3 = Point3(2048, 2048, 2048);
 
 
 fn split_dfs(root: &mut BSPNode<Tile>, depth: u32, rng: &mut StdRng) {
@@ -154,31 +153,56 @@ pub fn initbt(size: Point3, divisions: u32) -> () {
 
 }
 
-/*
+
 fn main() {
+    let size = Point3(2048, 2048, 2048);
+    let divisions: u32 = 6;
+
     let mut rng = StdRng::seed_from_u64(SEED);
 
-    let divisions: u32 = 6;
-    let mut root = BSPNode{ value: Tile{lc: Point3(0,0,0), rc: Point3(2048, 2048, 2048), traversible: false, split_count: 0, room: None}, right: None, left: None, split_d: Axis::random_variant()};
-    
+    let mut root = BSPNode{
+        value: Tile{index: INDEX.fetch_add(1, Relaxed), lc: Point3(0, 0, 0), rc: size, traversible: false, split_count: 0, room: None},
+        right: None,
+        left: None,
+        split_d: Axis::random_variant()
+    };
+
     let mut obj_data = create_obj();
     let mut v: usize = 0;
+    let mut tvec = Vec::<Tile>::new();
 
-    split_dfs(&mut root, divisions);
-    let mut map = Map{tiles: Vec::<Tile>::new()};
+    split_dfs(&mut root, divisions, &mut rng);
     build_dfs(&mut root, &mut tvec, &mut rng, &mut obj_data, v);
-    
+
+    //This needs to be made into a loop that works regardless of how many dimensions there are, but this will do for now
+    //TODO NEXT: Use sorted tile map to route the manhattan paths between the guaranteed space between rooms.
+    //Find an efficient way to do this, the naïve approach is to just use a bunch of conditionals.
+    let mut map = Vec::<Vec<(usize, Point3, Point3)>>::new();
+
+    //Map of vectors of the form:
+    // (index: u64, left_corner: Point3, right_corner: point3) 
+    tvec.sort_by(|t1, t2| t1.rc.0.cmp(&t2.rc.0));
+    map.push(tvec.iter().map(|t| (t.index, t.lc, t.rc)).collect());
+    tvec.sort_by(|t1, t2| t1.rc.1.cmp(&t2.rc.1));
+    map.push(tvec.iter().map(|t| (t.index, t.lc, t.rc)).collect());
+    tvec.sort_by(|t1, t2| t1.rc.2.cmp(&t2.rc.2));
+    map.push(tvec.iter().map(|t| (t.index, t.lc, t.rc)).collect());
+
+
 
     let arena = Bump::new();
 
+    
     edge_dfs(&root, divisions, &arena);
 
     //TEMPORARY call to delay a refactor of the call chain in edges.rs
-    let mut e = orthogonal_paths(EDGES.read().unwrap().to_vec());
+    let mut e = orthogonal_paths(EDGES.read().unwrap().to_vec(), map);
     EDGES.write().unwrap().clear();
     EDGES.write().unwrap().append(&mut e);
-    let mut meowmeow = create_corridors(EDGES.read().unwrap().to_vec());
+    let meowmeow = create_corridors(EDGES.read().unwrap().to_vec());
 
+    //Looks a little weird, v is just an index used inside the box function
+    
     for e in meowmeow {
         v = add_obj_box(e.0, e.1, &mut obj_data, v);
     }
@@ -186,9 +210,9 @@ fn main() {
     let mut file = File::create("grch_export.obj").expect("Failed to create file");
     file.write_all(obj_data.as_bytes()).expect("Failed to write to file");
     println!("OBJ file exported");
+
 }
 
-*/
 
 
 

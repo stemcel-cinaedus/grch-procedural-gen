@@ -4,8 +4,9 @@ use std::sync::{RwLock};
 use bumpalo::Bump;
 use bumpalo::collections::Vec as BumpVec;
 
-use crate::{ROOM_SCALE_FACTOR};
+use crate::ROOM_SCALE_FACTOR;
 use crate::CORRIDOR_WIDTH;
+use crate::SIZE;
 
 use crate::types::*;
 
@@ -108,15 +109,18 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
 
         //The span of the tile that cnontains the room minus the span of the room
         //Should not be treated as an actual point
+
+        //Changed to get the free space from a tile, as opposed to from a room
         fn get_free_space(lc: Point3, rc: Point3) -> Point3 {
-                let b0 = (rc.0 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64 - lc.0 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64) - (rc.0 - lc.0);
-                let b1 = (rc.1 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64 - lc.1 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64) - (rc.1 - lc.1);
-                let b2 = (rc.2 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64 - lc.2 * (1.0 / (1.0 - ROOM_SCALE_FACTOR)) as i64) - (rc.2 - lc.2);
+                let b0 = ((rc.0 - lc.0) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
+                let b1 = ((rc.1 - lc.1) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
+                let b2 = ((rc.2 - lc.2) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
                 return Point3(b0, b1, b2);
             }
-        let mut free_space = get_free_space(e.1, e.2);
 
-       //Math might be fucked now becase refactor
+        //Need to find the room that the tile starts from to get the free space
+        let starting_room = map[0].iter().filter(|t| t.0 == e.0).next().unwrap();
+        let mut free_space = get_free_space(starting_room.1, starting_room.2);
         
         match e.3 {
             Axis::X => {
@@ -153,11 +157,11 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
         while ez.2 != target {
 
             //X bounds check
-            let x_change = ez.2.0 +  (dx * delta) as i64;
-            if x_change > start_pos.0 + free_space.0 {
+            let x_change = ez.2.0 + (dx * delta) as i64;
+            if x_change >= start_pos.0 + free_space.0 && x_change <= SIZE.0 {
                 //If this doesn't work, double check that tile bounds are allowed to overlap
                 let r = map[0].iter()
-                        .filter(|t| t.1.0 == x_change + free_space.0 || t.2.0 == x_change + free_space.0)
+                        .filter(|t| t.1.0 == start_pos.0 + free_space.0 || t.2.0 == start_pos.0 + free_space.0)
                         .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
@@ -165,18 +169,21 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                     };
 
                 start_pos = Point3(start_pos.0 + free_space.0, ez.2.1, ez.2.2);
+                ex = (ez.0, ez.2, start_pos, e.3);
+                //Bad math on this
+                //Change it to something like dx -= ((free_space.0 + starting_pos.0) - ez.2.0), am too tired rn
+                dx -= (x_change - free_space.0) as f64;
                 free_space = get_free_space(r.1, r.2);
-                dx += (x_change - free_space.0) as f64;
 
+            } else {
+                ex = (ez.0, ez.2, Point3(ez.2.0 + (dx * delta) as i64, ez.2.1, ez.2.2), e.3);
             }
-
-            ex = (ez.0, ez.2, Point3(ez.2.0 + (dx * delta) as i64, ez.2.1, ez.2.2), e.3);
 
             //Y bounds check
             let y_change = ex.2.1 +  (dy * delta) as i64;
-            if y_change > start_pos.1 + free_space.1 {
+            if y_change >= start_pos.1 + free_space.1 && y_change <= SIZE.1 {
                 let r = map[1].iter()
-                        .filter(|t| t.1.1 == y_change + free_space.1 || t.2.1 == y_change + free_space.1)
+                        .filter(|t| t.1.1 == start_pos.1 + free_space.1 || t.2.1 == start_pos.1 + free_space.1)
                         .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
@@ -184,18 +191,19 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                     };
 
                 start_pos = Point3(ex.2.0, start_pos.1 + free_space.1, ex.2.2);
-                free_space = get_free_space(r.1, r.2);
+                ey = (ex.0, ex.2, start_pos, e.3);
                 dy += (y_change - free_space.1) as f64;
+                free_space = get_free_space(r.1, r.2);
 
+            } else {
+                ey = (ez.0, ex.2, Point3(ex.2.0, ex.2.1 + (dy * delta) as i64, ex.2.2), e.3);
             }
-
-            ey = (ez.0, ex.2, Point3(ex.2.0, ex.2.1 + (dy * delta) as i64, ex.2.2), e.3);
 
             //Z bounds check
             let z_change = ey.2.2 +  (dz * delta) as i64;
-            if z_change > start_pos.2 + free_space.2 {
+            if z_change >= start_pos.2 + free_space.2 && z_change <= SIZE.2 {
                 let r = map[2].iter()
-                        .filter(|t| t.1.2 == z_change + free_space.2 || t.2.2 == z_change + free_space.2)
+                        .filter(|t| t.1.2 == start_pos.2 + free_space.2 || t.2.2 == start_pos.2 + free_space.2 )
                         .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
@@ -203,11 +211,13 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                     };
 
                 start_pos = Point3(ey.2.0, ey.2.1, start_pos.2 + free_space.2);
-                free_space = get_free_space(r.1, r.2);
+                ez = (ey.0, ey.2, start_pos, e.3);
                 dz += (z_change - free_space.2) as f64;
+                free_space = get_free_space(r.1, r.2);
 
+            } else {
+                ez = (ez.0, ey.2, Point3(ey.2.0, ey.2.1, ey.2.2 + (dz * delta) as i64), e.3);
             }
-            ez = (ez.0, ey.2, Point3(ey.2.0, ey.2.1, ey.2.2 + (dz * delta) as i64), e.3);
 
             new_edges.push(ex);
             new_edges.push(ey);
