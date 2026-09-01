@@ -165,14 +165,18 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                         .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
-                        None => panic!("No room found with bounds that match queried bounds! Critical error in pathing function!")
+                        None => { 
+                            print!(
+                                "No room found with bounds that match queried bounds! Critical error in pathing function! Bounds: x: {} y: {} z: {} | Edge: x: {} y: {} z: {} | Axis: {:#?} | Split Point: {}",
+                                start_pos.0 + free_space.0, start_pos.1 + free_space.1, start_pos.2 + free_space.2, ez.2.0, ez.2.1, ez.2.2, e.3, start_pos.0 + free_space.0
+                            );
+                            panic!();
+                        }
                     };
 
-                start_pos = Point3(start_pos.0 + free_space.0, ez.2.1, ez.2.2);
                 ex = (ez.0, ez.2, start_pos, e.3);
-                //Bad math on this
-                //Change it to something like dx -= ((free_space.0 + starting_pos.0) - ez.2.0), am too tired rn
-                dx -= (x_change - free_space.0) as f64;
+                dx -= ((free_space.0 + start_pos.0) - ez.2.0) as f64;
+                start_pos = Point3(start_pos.0 + free_space.0, ez.2.1, ez.2.2);
                 free_space = get_free_space(r.1, r.2);
 
             } else {
@@ -187,12 +191,17 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                         .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
-                        None => panic!("No room found with bounds that match queried bounds! Critical error in pathing function!")
+                        None => { 
+                            print!(
+                                "No room found with bounds that match queried bounds! Critical error in pathing function! Bounds: x: {} y: {} z: {} | Edge: x: {} y: {} z: {} | Axis: {:#?} | Split Point: {}",
+                                start_pos.0 + free_space.0, start_pos.1 + free_space.1, start_pos.2 + free_space.2, ex.2.0, ex.2.1, ex.2.2, e.3, start_pos.1 + free_space.1
+                            );
+                            panic!();
+                        }
                     };
-
-                start_pos = Point3(ex.2.0, start_pos.1 + free_space.1, ex.2.2);
                 ey = (ex.0, ex.2, start_pos, e.3);
-                dy += (y_change - free_space.1) as f64;
+                dy -= ((free_space.1 + start_pos.1) - ez.2.1) as f64;
+                start_pos = Point3(ex.2.0, start_pos.1 + free_space.1, ex.2.2);
                 free_space = get_free_space(r.1, r.2);
 
             } else {
@@ -207,12 +216,19 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                         .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
                 let r = match r {
                         Some(v) => v,
-                        None => panic!("No room found with bounds that match queried bounds! Critical error in pathing function!")
+                        None => { 
+                            print!(
+                                "No room found with bounds that match queried bounds! Critical error in pathing function! Bounds: x: {} y: {} z: {} | Edge: x: {} y: {} z: {} | Axis: {:#?} | Split Point: {}",
+                                start_pos.0 + free_space.0, start_pos.1 + free_space.1, start_pos.2 + free_space.2, ey.2.0, ey.2.1, ey.2.2, e.3, start_pos.2 + free_space.2
+                            );
+                            panic!();
+                        }
                     };
 
-                start_pos = Point3(ey.2.0, ey.2.1, start_pos.2 + free_space.2);
+               
                 ez = (ey.0, ey.2, start_pos, e.3);
-                dz += (z_change - free_space.2) as f64;
+                dz -= ((free_space.2 + start_pos.2) - ez.2.2) as f64;
+                start_pos = Point3(ey.2.0, ey.2.1, start_pos.2 + free_space.2);
                 free_space = get_free_space(r.1, r.2);
 
             } else {
