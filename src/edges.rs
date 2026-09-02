@@ -71,7 +71,7 @@ fn generate_edges(rooms: (&[&Room], &[&Room]), axis: Axis, split_pos: Point3) ->
         }
     });
 
-    let mut right_closest = (rooms.0[0], i64::MAX);
+    let mut right_closest = (rooms.1[0], i64::MAX);
     rooms.1.iter().for_each(|r| {
         let d = get_point_dist(r, split_pos);
         if d.0 < right_closest.1 || d.1 < right_closest.1 {
@@ -111,16 +111,13 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
         //Should not be treated as an actual point
 
         //Changed to get the free space from a tile, as opposed to from a room
+        //THIS IS PROBABLY CAUSING A CATOSTROPHIC ERROR
         fn get_free_space(lc: Point3, rc: Point3) -> Point3 {
-                let b0 = ((rc.0 - lc.0) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
-                let b1 = ((rc.1 - lc.1) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
-                let b2 = ((rc.2 - lc.2) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
+                let b0 = (rc.0 - lc.0) - ((rc.0 - lc.0) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
+                let b1 = (rc.1 - lc.1) - ((rc.1 - lc.1) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
+                let b2 = (rc.2 - lc.2) - ((rc.2 - lc.2) as f64 * (1.0 - ROOM_SCALE_FACTOR)) as i64;
                 return Point3(b0, b1, b2);
             }
-
-        //Need to find the room that the tile starts from to get the free space
-        let starting_room = map[0].iter().filter(|t| t.0 == e.0).next().unwrap();
-        let mut free_space = get_free_space(starting_room.1, starting_room.2);
         
         match e.3 {
             Axis::X => {
@@ -154,12 +151,20 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
             Axis::Z => Point3(e.2.0, e.2.1, e.2.2 - (delta_o / 2)),
         };
 
+        map[0].iter().for_each(|v| println!("{:#?}", v));
+        let starting_room = map[0].iter().filter(|t| t.0 == e.0).next().unwrap();
+        println!("Starting Room (The one used for the initial free space calculation): {:#?}", starting_room);
+        let mut free_space = get_free_space(starting_room.1, starting_room.2);
+        println!("Free space generated from the starting tile: {:#?}", free_space);
+
         while ez.2 != target {
 
             //X bounds check
+            //Now add checks for decreasing paths and everything should be finished
             let x_change = ez.2.0 + (dx * delta) as i64;
             if x_change >= start_pos.0 + free_space.0 && x_change <= SIZE.0 {
-                //If this doesn't work, double check that tile bounds are allowed to overlap
+
+
                 let r = map[0].iter()
                         .filter(|t| t.1.0 == start_pos.0 + free_space.0 || t.2.0 == start_pos.0 + free_space.0)
                         .min_by_key(|t| ((e.1.sum().pow(2) + e.2.sum().pow(2)) - (t.1.sum().pow(2) + t.2.sum().pow(2))).pow(2));
@@ -174,9 +179,10 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                         }
                     };
 
-                ex = (ez.0, ez.2, start_pos, e.3);
+               
                 dx -= ((free_space.0 + start_pos.0) - ez.2.0) as f64;
                 start_pos = Point3(start_pos.0 + free_space.0, ez.2.1, ez.2.2);
+                ex = (ez.0, ez.2, start_pos, e.3);
                 free_space = get_free_space(r.1, r.2);
 
             } else {
@@ -199,9 +205,10 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                             panic!();
                         }
                     };
-                ey = (ex.0, ex.2, start_pos, e.3);
+                
                 dy -= ((free_space.1 + start_pos.1) - ez.2.1) as f64;
                 start_pos = Point3(ex.2.0, start_pos.1 + free_space.1, ex.2.2);
+                ey = (ex.0, ex.2, start_pos, e.3);
                 free_space = get_free_space(r.1, r.2);
 
             } else {
@@ -226,9 +233,10 @@ pub fn orthogonal_paths(edges: Vec<(usize, Point3, Point3, Axis)>, map: Vec<Vec<
                     };
 
                
-                ez = (ey.0, ey.2, start_pos, e.3);
+                
                 dz -= ((free_space.2 + start_pos.2) - ez.2.2) as f64;
                 start_pos = Point3(ey.2.0, ey.2.1, start_pos.2 + free_space.2);
+                ez = (ey.0, ey.2, start_pos, e.3);
                 free_space = get_free_space(r.1, r.2);
 
             } else {
